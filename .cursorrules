@@ -1,0 +1,18 @@
+# AI Agent 协作开发铁律 (AI Agent Development Rules)
+
+本文件是本项目的核心开发规约。后续任何接手本项目的 AI 助手（无论是哪种大模型）都必须严格、无条件遵守以下规则：
+
+## 1. 开发状态全程记录规约 (Project Status Rules)
+* 项目状态文件 [PROJECT_STATUS.md](file:///e:/My_AI_Projects/JimengHelper/PROJECT_STATUS.md) 是本项目进展的“活化石”。
+* **严禁抹除、覆盖或简化历史开发记录**。
+* 每次对项目进行迭代、修改或调试代码后，必须在 `PROJECT_STATUS.md` 的末尾以**追加日志时间轴**的方式，新增一个详细的章节，如实记录本次修改的原因、所作的改动以及后续的计划。
+
+## 2. 沟通历史全程累加规约 (Chat Archive Rules)
+* 沟通归档文件 [development_chat_archive.md](file:///e:/My_AI_Projects/JimengHelper/development_chat_archive.md) 记录了用户与 AI 从项目初创第一天开始的所有核心对话和开发决策。
+* **严禁删除、截断或清空旧的沟通历史**。
+* 每一阶段的开发或沟通完毕后，必须将本轮与用户的核心对话、设计博弈、需求演变及最终技术落地方案，作为新的“阶段（Stage/Phase）”追加写到该文件的末尾，确保开发逻辑全程可追溯。
+
+## 3. 便携与代码纯净规约 (Code & Aesthetics Rules)
+* 本助手致力于打造免密、绿色便携、零报错的本地运行体验。
+* 编写代码和文档时必须全中文思考和回复，使用通俗易懂的语言，保持零基础友好。
+* 代码修改后必须进行自主验证，保证其随时可拷贝至任何电脑直接运行。
