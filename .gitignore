@@ -1,0 +1,24 @@
+# 忽略 Python 自动编译生成的字节码
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 忽略打包临时目录和产物
+build/
+dist/
+*.spec
+
+# 核心保护：忽略本地创作者作品缓存库以及测试 debug 脚本目录
+scratch/
+
+# 忽略内嵌的绿色 Python 运行环境
+python-embed/
+
+# 忽略开发工具和 IDE 配置
+.vscode/
+.idea/
+.git/
+.chatledger/
+*.log
+*.db
