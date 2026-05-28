@@ -969,6 +969,48 @@
                 </div>
             </div>
 
+            <!-- 光影照明点选 -->
+            <div style="margin-top: 15px;">
+                <label style="font-size:12px; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:8px;">选择光影照明 (单选):</label>
+                <div class="tag-selector">
+                    <button 
+                        v-for="l in lightingTags" 
+                        :key="l" 
+                        class="tag-btn" 
+                        :class="{ active: promptLighting === l }"
+                        @click="promptLighting = l"
+                    >{{ l }}</button>
+                </div>
+            </div>
+
+            <!-- 细节画质点选 -->
+            <div style="margin-top: 15px;">
+                <label style="font-size:12px; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:8px;">选择细节画质 (单选):</label>
+                <div class="tag-selector">
+                    <button 
+                        v-for="q in qualityTags" 
+                        :key="q" 
+                        class="tag-btn" 
+                        :class="{ active: promptQuality === q }"
+                        @click="promptQuality = q"
+                    >{{ q }}</button>
+                </div>
+            </div>
+
+            <!-- 声音配乐点选 -->
+            <div style="margin-top: 15px;">
+                <label style="font-size:12px; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:8px;">选择声音与配乐 (单选 - 视听同步关键要素):</label>
+                <div class="tag-selector">
+                    <button 
+                        v-for="a in audioTags" 
+                        :key="a" 
+                        class="tag-btn" 
+                        :class="{ active: promptAudio === a }"
+                        @click="promptAudio = a"
+                    >{{ a }}</button>
+                </div>
+            </div>
+
             <!-- 触发生成 -->
             <button 
                 class="btn-primary" 
@@ -1227,12 +1269,26 @@
                 const inspiration = ref('');
                 const promptStyle = ref('90年代港风武侠');
                 const promptCamera = ref('360度环绕慢动作');
+                const promptLighting = ref('cinematic lighting (电影光影)');
+                const promptQuality = ref('8k resolution (8k超清)');
+                const promptAudio = ref('史诗交响乐 (BGM) + 金属物理撞击声');
                 const promptGenerating = ref(false);
                 const promptResultA = ref('');
                 const promptResultB = ref('');
 
                 const styleTags = ref(['90年代港风武侠', '日落黄金时刻', '赛博朋克', '电影质感胶片', '现代废土风', '水墨国风', '复古科幻']);
                 const cameraTags = ref(['360度环绕慢动作', '镜头平移推进', '特写缓慢拉近', '大全景俯拍拉远', '眩晕希区柯克变焦', '剧烈镜头晃动']);
+                const lightingTags = ref(['cinematic lighting (电影光影)', 'volumetric light (体积光/丁达尔效应)', 'neon glow (霓虹发光)', 'moody shadows (深邃阴影)', 'lens flare (镜头炫光)', 'dramatic split lighting (戏剧性分光)', 'golden hour light (黄金时刻光)']);
+                const qualityTags = ref(['8k resolution (8k超清)', 'unreal engine 5 render (虚幻5渲染)', 'extreme macro detail (微距细节)', 'masterpiece (杰作)', 'photorealistic (逼真写实)', 'ray tracing (光线追踪)', '3d texture (3D立体纹理)']);
+                const audioTags = ref([
+                    '史诗交响乐 (BGM) + 金属物理撞击声',
+                    '空灵钢琴曲 (BGM) + 深沉独白旁白',
+                    '动感电子鼓点 (BGM) + 重低音爆破音效',
+                    '90年代复古磁带杂音 + 沧桑老者旁白',
+                    '赛博朋克合成器乐 (BGM) + 电子警报声',
+                    '惊悚环境白噪音 (BGM) + 细微呼吸声',
+                    '欢快爵士乐 (BGM) + 玻璃清脆敲击声'
+                ]);
                 
                 // 新增作者列表
                 const authorsList = ref([]);
@@ -1600,6 +1656,9 @@
                                 inspiration: inspiration.value.trim(),
                                 style: promptStyle.value,
                                 camera: promptCamera.value,
+                                lighting: promptLighting.value,
+                                quality: promptQuality.value,
+                                audio: promptAudio.value,
                                 api_key: apiKey.value.trim()
                             })
                         });
@@ -1696,9 +1755,15 @@
                     // 2.0 创意工坊导出
                     styleTags,
                     cameraTags,
+                    lightingTags,
+                    qualityTags,
+                    audioTags,
                     inspiration,
                     promptStyle,
                     promptCamera,
+                    promptLighting,
+                    promptQuality,
+                    promptAudio,
                     promptGenerating,
                     promptResultA,
                     promptResultB,

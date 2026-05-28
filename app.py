@@ -316,44 +316,7 @@ def get_author_works():
         except Exception:
             pass
             
-    return jsonify({
-        "code": 0,
-        "msg": "success",
-        "data": author_info
-    })
-
-# 3. 核心接口：获取所有已收录的创作者名录
-@app.route('/api/authors/list', methods=['GET'])
-def get_authors_list():
-    cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scratch")
-    cache_path = os.path.join(cache_dir, "parsed_authors_cache.json")
-    
-    if not os.path.exists(cache_path):
-        return jsonify({"code": 0, "data": []})
-        
-    try:
-        with open(cache_path, "r", encoding="utf-8") as f:
-            cache_data = json.load(f)
-    except Exception:
-        return jsonify({"code": -1, "msg": "读取本地缓存失败"}), 500
-        
-    list_out = []
-    for sec_uid, info in cache_data.items():
-        list_out.append({
-            "sec_uid": sec_uid,
-            "author_name": info.get("author_name") or "新收录创作者",
-            "author_avatar": info.get("author_avatar") or "",
-            "works_count": len(info.get("works") or [])
-        })
-        
-    # 按照收录的作品数量进行降序排列，作品多的创作者排在前面
-    list_out.sort(key=lambda x: x["works_count"], reverse=True)
-    
-    return jsonify({
-        "code": 0,
-        "msg": "success",
-        "data": list_out
-    })
+    return jsonify({"code": 0, "data": author_info})
 
 # 3.5 2.0 新增接口：AI 创意提示词工坊，将基本创意智能扩写为 15秒电影级短视频双版本词
 @app.route('/api/prompt/generate', methods=['POST'])
@@ -362,6 +325,9 @@ def generate_prompt():
     inspiration = data.get("inspiration", "").strip()
     selected_style = data.get("style", "").strip()
     selected_camera = data.get("camera", "").strip()
+    selected_lighting = data.get("lighting", "").strip()
+    selected_quality = data.get("quality", "").strip()
+    selected_audio = data.get("audio", "").strip()
     api_key = data.get("api_key", "").strip()
     
     if not inspiration:
@@ -369,29 +335,36 @@ def generate_prompt():
     if not api_key:
         return jsonify({"code": -1, "msg": "请输入大模型的 API Key 以便进行润色"}), 400
         
-    print(f"收到创意扩写请求: 创意={inspiration[:50]}, 风格={selected_style}, 运镜={selected_camera}")
+    print(f"收到创意扩写请求: 创意={inspiration[:50]}, 风格={selected_style}, 运镜={selected_camera}, 光影={selected_lighting}, 细节={selected_quality}, 声音={selected_audio}")
     
     # 电影导演指令系统预设，定义好双版本输出格式和硬性字数控制
     director_system_prompt = (
-        "你是一个顶级的 AI 视频生成提示词导演专家，擅长为即梦AI、Sora等大模型创作 15秒电影级高品质短视频提示词。\n"
-        "现在用户会给你提供一个视频的基本创意要素，并指定视频的风格和运镜标签。\n\n"
-        "你的任务是将这些要素完美融合，并同时输出两个版本的 15秒视频专业提示词：【版本 A (分镜时间轴控制版)】和【版本 B (电影长句融合版)】。\n\n"
+        "你是一个顶级的 AI 视频生成提示词导演专家，擅长为即梦AI、Sora等模型创作 15秒电影级高品质短视频提示词。\n"
+        "用户会提供一个视频的基本创意要素，并指定视频的风格、运镜、光影、细节画质以及声音配乐等专业标签。\n\n"
+        "你的任务是将这些视听要素完美结合，并同时输出两个版本的 15秒视频专业提示词：【版本 A (分镜时间轴控制版)】和【版本 B (电影长句融合版)】。\n\n"
         "你必须严格按照以下格式输出，不要有任何多余的开头介绍、前言问候、分析解释或结尾寄语。输出格式为：\n\n"
         "====VERSION_A====\n"
         "### 🎬 15秒分镜时间轴版 (Version A)\n"
-        "- **00:00-00:05** (画面铺垫与起势)：[结合所选风格与运镜，详细且富视觉张力地描述前5秒的角色、服装、环境铺垫与动作起势]\n"
-        "- **00:05-00:10** (动作蓄力与镜头过渡)：[描述中间5秒的画面演变、运镜方式、材质细节与动态蓄力，镜头保持平滑]\n"
-        "- **00:10-00:15** (卡点爆发与高潮收尾)：[描述最后5秒的卡点动作高潮、剧烈的物理碰撞特效如水花飞溅/物体破碎，以及完美的镜头定格]\n"
-        "*(推荐参数：[给出推荐的清晰度、运镜速度等一句话建议])*\n\n"
+        "- **00:00-00:05** (画面铺垫与起势)：[结合所选风格、运镜与光影描述角色、服装、起势动作。同时标明声音/配乐切入点，如 BGM 节奏轻柔切入或特定物理环境音效出现]\n"
+        "- **00:05-00:10** (动作蓄力与镜头过渡)：[结合运镜、细节与光影变化描述动作蓄力与镜头过渡。同时标明声音/配乐的起伏变化，或人声旁白/独白进入的句式]\n"
+        "- **00:10-00:15** (卡点爆发与高潮收尾)：[结合细节画质描述动作卡点爆发、物理碰撞特效如水花飞溅/碎片激荡。同时必须写明在此阶段配合画面爆发爆发出的最强物理音效或BGM节拍卡点爆破，并镜头定格]\n"
+        "*(推荐参数及配乐风格：[给出推荐的清晰度、运镜速度，以及最适合卡点的BGM曲风等建议])*\n\n"
         "====VERSION_B====\n"
         "### 🎥 电影级长句融合版 (Version B)\n"
-        "[不需要数字序号和列表，不要有类似‘画面：’、‘运镜：’等任何分类标签前缀，将“画面、景别、运镜、光影、色调、音效、情绪、镜头构图、氛围感”完全融入一整段连贯、画面感极强的中文叙事长句中。在中文中要非常自然地夹带英文专业术语如 close-up, volumetric light, slow camera pan, motion blur 等，直接开始描述，无额外前缀。]\n\n"
+        "[不要使用数字序号、Markdown列表，不要带任何分类标签前缀（如‘画面：’、‘声音：’等），将画面主体、动作、服装、材质细节、镜头运镜、光影色调与声音氛围（包括背景音乐节拍变化、人声旁白质感描述、关键画面发生时的物理撞击或破碎音效配合）完全融合在一整段连贯、画面感极强的中文叙事长句中。在此中文长句中要非常自然地夹带英文专业术语如 close-up, cinematic lighting, sub-bass pulse, glass shattering 等，直接开始描述，无额外前缀。]\n\n"
         "【硬性约束】：\n"
-        "1. 版本 A 和版本 B 的总字数，必须各自独立控制在 600 字以内，精炼且富有电影张力。\n"
-        "2. 严禁输出任何格式外的其他闲聊字眼。必须以 ====VERSION_A==== 开头，以 ====VERSION_B==== 进行分隔。"
+        "1. 版本 A 和版本 B 的总字数，必须各自独立控制在 600 字以内，精炼且富有电影视听张力。\n"
+        "2. 严禁输出任何格式外的闲聊。必须以 ====VERSION_A==== 开头，以 ====VERSION_B==== 进行分隔。"
     )
     
-    user_message = f"视频基本创意要素：{inspiration}\n指定画质风格：{selected_style}\n指定镜头运镜：{selected_camera}"
+    user_message = (
+        f"视频基本创意要素：{inspiration}\n"
+        f"指定画质风格：{selected_style}\n"
+        f"指定镜头运镜：{selected_camera}\n"
+        f"指定光影照明：{selected_lighting}\n"
+        f"指定细节画质：{selected_quality}\n"
+        f"指定声音配乐：{selected_audio}"
+    )
     
     qwen_api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
     
@@ -415,7 +388,7 @@ def generate_prompt():
     
     try:
         data_bytes = json.dumps(payload).encode('utf-8')
-        req = urllib.request.Request(qwen_api_url, headers=headers, data_bytes=data_bytes, method="POST")
+        req = urllib.request.Request(qwen_api_url, headers=headers, data=data_bytes, method="POST")
         with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
             res_data = resp.read().decode('utf-8')
             res_json = json.loads(res_data)
@@ -452,6 +425,7 @@ def generate_prompt():
         })
     except Exception as e:
         return jsonify({"code": -1, "msg": f"AI 创意生成失败: {str(e)}，请确认您的 API Key 输入无误，或者网络连接正常。"}), 500
+
 
 # 4. 核心接口：通义千问大模型智能反推提示词
 @app.route('/api/reverse', methods=['POST'])
