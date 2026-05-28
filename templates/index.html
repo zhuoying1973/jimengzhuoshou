@@ -808,6 +808,39 @@
             background: var(--neon-blue);
             color: #000;
         }
+        
+        /* 2.0 标签选择器 */
+        .tag-selector {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .tag-btn {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--text-secondary);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .tag-btn:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .tag-btn.active {
+            color: #fff;
+            background: rgba(0, 240, 255, 0.1);
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+        }
     </style>
 </head>
 <body>
@@ -886,6 +919,92 @@
                     <span v-if="loading"><i class="fa-solid fa-spinner fa-spin"></i> 解析中</span>
                     <span v-else><i class="fa-solid fa-bolt"></i> 一键提取</span>
                 </button>
+            </div>
+        </div>
+
+        <!-- 2.0 创意提示词工坊卡片 -->
+        <div class="glass-card">
+            <div class="section-title">
+                <span><i class="fa-solid fa-wand-magic-sparkles" style="color: var(--neon-pink)"></i> 2.0 创意提示词工坊</span>
+                <span style="font-size:11px; font-weight:normal; text-transform:none; color:var(--neon-blue)">
+                    15秒创意短视频专用
+                </span>
+            </div>
+            
+            <!-- 创意输入 -->
+            <div style="margin-top: 15px; display:flex; flex-direction:column; gap:8px;">
+                <label style="font-size:12px; font-weight:600; color:var(--text-secondary)">输入视频基本要素 (故事骨架/主角动作/环境)：</label>
+                <textarea 
+                    v-model="inspiration" 
+                    placeholder="例如：一个老人在清晨小雨中静心打太极，随着动作推移，他内劲爆发一掌击碎身旁的水缸..."
+                    style="width:100%; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:12px; color:#fff; font-size:13px; height:80px; resize:none; outline:none; font-family: inherit; line-height:1.5;"
+                ></textarea>
+            </div>
+
+            <!-- 风格点选 -->
+            <div style="margin-top: 15px;">
+                <label style="font-size:12px; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:8px;">选择画质风格 (单选):</label>
+                <div class="tag-selector">
+                    <button 
+                        v-for="s in styleTags" 
+                        :key="s" 
+                        class="tag-btn" 
+                        :class="{ active: promptStyle === s }"
+                        @click="promptStyle = s"
+                    >{{ s }}</button>
+                </div>
+            </div>
+
+            <!-- 运镜点选 -->
+            <div style="margin-top: 15px;">
+                <label style="font-size:12px; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:8px;">选择镜头运镜 (单选):</label>
+                <div class="tag-selector">
+                    <button 
+                        v-for="c in cameraTags" 
+                        :key="c" 
+                        class="tag-btn" 
+                        :class="{ active: promptCamera === c }"
+                        @click="promptCamera = c"
+                    >{{ c }}</button>
+                </div>
+            </div>
+
+            <!-- 触发生成 -->
+            <button 
+                class="btn-primary" 
+                style="width:100%; margin-top:20px; height:45px; border-radius:12px;"
+                :disabled="promptGenerating || !inspiration.trim()" 
+                @click="generatePrompt"
+            >
+                <span v-if="promptGenerating"><i class="fa-solid fa-spinner fa-spin"></i> 阿福正在努力润色中...</span>
+                <span v-else><i class="fa-solid fa-wand-magic-sparkles"></i> 让阿福帮我专业润色</span>
+            </button>
+
+            <!-- 生成的双版本结果展示区 -->
+            <div v-if="promptResultA || promptResultB" style="margin-top:25px; display:flex; flex-direction:column; gap:20px;">
+                
+                <!-- 版本 A：时间轴版 -->
+                <div v-if="promptResultA">
+                    <div class="section-title">
+                        <span>版本 A：🎬 15秒分镜时间轴控制版</span>
+                        <button class="btn-copy-mini" @click="copyText(promptResultA)">一键复制 A</button>
+                    </div>
+                    <div class="prompt-box" style="border-color: rgba(255, 0, 127, 0.2); background:rgba(0,0,0,0.3); font-size:13px; line-height:1.6; margin-bottom:0;">
+                        {{ promptResultA }}
+                    </div>
+                </div>
+
+                <!-- 版本 B：长句融合版 -->
+                <div v-if="promptResultB">
+                    <div class="section-title" style="margin-top:5px;">
+                        <span>版本 B：🎥 电影级长句融合版 (首选)</span>
+                        <button class="btn-copy-mini" @click="copyText(promptResultB)">一键复制 B</button>
+                    </div>
+                    <div class="prompt-box" style="border-color: rgba(0, 240, 255, 0.2); background:rgba(0,0,0,0.3); font-size:13px; line-height:1.6; margin-bottom:0;">
+                        {{ promptResultB }}
+                    </div>
+                </div>
+
             </div>
         </div>
 
@@ -1103,6 +1222,17 @@
                 const showSettings = ref(false);
                 const apiKey = ref('');
                 const reverseMode = ref('2'); // 默认使用方案二叙事长段融合
+                
+                // 2.0 创意提示词工坊响应式状态
+                const inspiration = ref('');
+                const promptStyle = ref('90年代港风武侠');
+                const promptCamera = ref('360度环绕慢动作');
+                const promptGenerating = ref(false);
+                const promptResultA = ref('');
+                const promptResultB = ref('');
+
+                const styleTags = ref(['90年代港风武侠', '日落黄金时刻', '赛博朋克', '电影质感胶片', '现代废土风', '水墨国风', '复古科幻']);
+                const cameraTags = ref(['360度环绕慢动作', '镜头平移推进', '特写缓慢拉近', '大全景俯拍拉远', '眩晕希区柯克变焦', '剧烈镜头晃动']);
                 
                 // 新增作者列表
                 const authorsList = ref([]);
@@ -1449,6 +1579,45 @@
                     }
                 };
 
+                // 2.0 创意提示词工坊生成逻辑
+                const generatePrompt = async () => {
+                    if (!inspiration.value.trim()) return;
+                    if (!apiKey.value.trim()) {
+                        showSettings.value = true;
+                        showToast("使用创意工坊必须先配置通义千问 API Key");
+                        return;
+                    }
+
+                    promptGenerating.value = true;
+                    promptResultA.value = '';
+                    promptResultB.value = '';
+
+                    try {
+                        const response = await fetch('/api/prompt/generate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                inspiration: inspiration.value.trim(),
+                                style: promptStyle.value,
+                                camera: promptCamera.value,
+                                api_key: apiKey.value.trim()
+                            })
+                        });
+                        const data = await response.json();
+                        if (data.code === 0) {
+                            promptResultA.value = data.data.version_a;
+                            promptResultB.value = data.data.version_b;
+                            showToast("阿福为您专业润色完成！");
+                        } else {
+                            showToast(data.msg);
+                        }
+                    } catch (e) {
+                        showToast("AI 服务端网络连接异常");
+                    } finally {
+                        promptGenerating.value = false;
+                    }
+                };
+
                 // 下载视频逻辑（修改为请求本地代理，以穿透 403 防盗链）
                 const downloadVideo = (url) => {
                     const proxyUrl = `/api/download?url=${encodeURIComponent(url)}`;
@@ -1526,7 +1695,17 @@
                     downloadVideo,
                     copyText,
                     formatCount,
-                    onVideoUnmount
+                    onVideoUnmount,
+                    // 2.0 创意工坊导出
+                    styleTags,
+                    cameraTags,
+                    inspiration,
+                    promptStyle,
+                    promptCamera,
+                    promptGenerating,
+                    promptResultA,
+                    promptResultB,
+                    generatePrompt
                 };
             }
         }).mount('#app');

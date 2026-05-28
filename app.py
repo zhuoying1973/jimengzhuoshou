@@ -355,6 +355,104 @@ def get_authors_list():
         "data": list_out
     })
 
+# 3.5 2.0 新增接口：AI 创意提示词工坊，将基本创意智能扩写为 15秒电影级短视频双版本词
+@app.route('/api/prompt/generate', methods=['POST'])
+def generate_prompt():
+    data = request.json or {}
+    inspiration = data.get("inspiration", "").strip()
+    selected_style = data.get("style", "").strip()
+    selected_camera = data.get("camera", "").strip()
+    api_key = data.get("api_key", "").strip()
+    
+    if not inspiration:
+        return jsonify({"code": -1, "msg": "请先输入您的创意基本要素"}), 400
+    if not api_key:
+        return jsonify({"code": -1, "msg": "请输入大模型的 API Key 以便进行润色"}), 400
+        
+    print(f"收到创意扩写请求: 创意={inspiration[:50]}, 风格={selected_style}, 运镜={selected_camera}")
+    
+    # 电影导演指令系统预设，定义好双版本输出格式和硬性字数控制
+    director_system_prompt = (
+        "你是一个顶级的 AI 视频生成提示词导演专家，擅长为即梦AI、Sora等大模型创作 15秒电影级高品质短视频提示词。\n"
+        "现在用户会给你提供一个视频的基本创意要素，并指定视频的风格和运镜标签。\n\n"
+        "你的任务是将这些要素完美融合，并同时输出两个版本的 15秒视频专业提示词：【版本 A (分镜时间轴控制版)】和【版本 B (电影长句融合版)】。\n\n"
+        "你必须严格按照以下格式输出，不要有任何多余的开头介绍、前言问候、分析解释或结尾寄语。输出格式为：\n\n"
+        "====VERSION_A====\n"
+        "### 🎬 15秒分镜时间轴版 (Version A)\n"
+        "- **00:00-00:05** (画面铺垫与起势)：[结合所选风格与运镜，详细且富视觉张力地描述前5秒的角色、服装、环境铺垫与动作起势]\n"
+        "- **00:05-00:10** (动作蓄力与镜头过渡)：[描述中间5秒的画面演变、运镜方式、材质细节与动态蓄力，镜头保持平滑]\n"
+        "- **00:10-00:15** (卡点爆发与高潮收尾)：[描述最后5秒的卡点动作高潮、剧烈的物理碰撞特效如水花飞溅/物体破碎，以及完美的镜头定格]\n"
+        "*(推荐参数：[给出推荐的清晰度、运镜速度等一句话建议])*\n\n"
+        "====VERSION_B====\n"
+        "### 🎥 电影级长句融合版 (Version B)\n"
+        "[不需要数字序号和列表，不要有类似‘画面：’、‘运镜：’等任何分类标签前缀，将“画面、景别、运镜、光影、色调、音效、情绪、镜头构图、氛围感”完全融入一整段连贯、画面感极强的中文叙事长句中。在中文中要非常自然地夹带英文专业术语如 close-up, volumetric light, slow camera pan, motion blur 等，直接开始描述，无额外前缀。]\n\n"
+        "【硬性约束】：\n"
+        "1. 版本 A 和版本 B 的总字数，必须各自独立控制在 600 字以内，精炼且富有电影张力。\n"
+        "2. 严禁输出任何格式外的其他闲聊字眼。必须以 ====VERSION_A==== 开头，以 ====VERSION_B==== 进行分隔。"
+    )
+    
+    user_message = f"视频基本创意要素：{inspiration}\n指定画质风格：{selected_style}\n指定镜头运镜：{selected_camera}"
+    
+    qwen_api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
+    
+    payload = {
+        "model": "qwen-plus",
+        "input": {
+            "messages": [
+                {"role": "system", "content": director_system_prompt},
+                {"role": "user", "content": user_message}
+            ]
+        },
+        "parameters": {
+            "result_format": "message"
+        }
+    }
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        data_bytes = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(qwen_api_url, headers=headers, data_bytes=data_bytes, method="POST")
+        with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
+            res_data = resp.read().decode('utf-8')
+            res_json = json.loads(res_data)
+            
+        choices = res_json.get("output", {}).get("choices", [])
+        if not choices:
+            err_msg = res_json.get("message", "大模型接口未返回有效文本，请检查您的 API Key 是否有效")
+            return jsonify({"code": -1, "msg": f"AI 润色失败: {err_msg}"}), 500
+            
+        text_content = choices[0].get("message", {}).get("content", "")
+        
+        # 将生成的两个版本拆分并做容错解析
+        version_a = ""
+        version_b = ""
+        
+        if "====VERSION_B====" in text_content:
+            parts = text_content.split("====VERSION_B====")
+            part_a = parts[0].replace("====VERSION_A====", "").strip()
+            part_b = parts[1].strip() if len(parts) > 1 else ""
+            version_a = part_a
+            version_b = part_b
+        else:
+            # 容错降级
+            version_a = text_content.replace("====VERSION_A====", "").strip()
+            version_b = "提示：大模型未完美按分隔符生成双版本，请参考左侧完整输出。"
+            
+        return jsonify({
+            "code": 0,
+            "msg": "success",
+            "data": {
+                "version_a": version_a,
+                "version_b": version_b
+            }
+        })
+    except Exception as e:
+        return jsonify({"code": -1, "msg": f"AI 创意生成失败: {str(e)}，请确认您的 API Key 输入无误，或者网络连接正常。"}), 500
+
 # 4. 核心接口：通义千问大模型智能反推提示词
 @app.route('/api/reverse', methods=['POST'])
 def reverse_prompt():
