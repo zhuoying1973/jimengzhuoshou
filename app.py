@@ -434,34 +434,39 @@ def reverse_prompt():
     
     data = request.json or {}
     image_url = data.get("image_url", "").strip()
+    image_base64 = data.get("image_base64", "").strip()
     api_key = data.get("api_key", "").strip()
     mode = data.get("mode", "2").strip()
     
-    if not image_url:
-        return jsonify({"code": -1, "msg": "缺少图片链接"}), 400
+    if not image_url and not image_base64:
+        return jsonify({"code": -1, "msg": "缺少图片链接或本地图片数据"}), 400
     if not api_key:
         return jsonify({"code": -1, "msg": "请先配置大模型 API Key（可在设置中填写）"}), 400
         
-    print(f"收到 AI 视频反推请求，方案模式: {mode}，图片地址: {image_url[:80]}...")
+    print(f"收到 AI 视频反推请求，方案模式: {mode}，是否有本地Base64: {bool(image_base64)}")
     
-    # 后端下载图片并转成 Base64，100% 避免大模型端拉取字节 CDN 403 限流
-    image_input = image_url
-    try:
-        img_headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Referer': 'https://jimeng.jianying.com/'
-        }
-        print("后端正在代理下载图片并转换为 Base64 数据流...")
-        img_req = urllib.request.Request(image_url, headers=img_headers)
-        with urllib.request.urlopen(img_req, context=ctx, timeout=15) as img_resp:
-            img_data = img_resp.read()
-            content_type = img_resp.headers.get('Content-Type', 'image/jpeg')
-        base64_data = base64.b64encode(img_data).decode('utf-8')
-        image_input = f"data:{content_type};base64,{base64_data}"
-        print("图片 Base64 转换成功！")
-    except Exception as e:
-        print(f"警告: 后端图片转 Base64 失败，回退到使用原 URL 请求大模型: {e}")
+    # 优先使用前端直传的 Base64，否则后端下载网络图片并转成 Base64
+    if image_base64:
+        image_input = image_base64
+        print("使用前端直接上传的本地图片数据流。")
+    else:
         image_input = image_url
+        try:
+            img_headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': 'https://jimeng.jianying.com/'
+            }
+            print("后端正在代理下载图片并转换为 Base64 数据流...")
+            img_req = urllib.request.Request(image_url, headers=img_headers)
+            with urllib.request.urlopen(img_req, context=ctx, timeout=15) as img_resp:
+                img_data = img_resp.read()
+                content_type = img_resp.headers.get('Content-Type', 'image/jpeg')
+            base64_data = base64.b64encode(img_data).decode('utf-8')
+            image_input = f"data:{content_type};base64,{base64_data}"
+            print("图片 Base64 转换成功！")
+        except Exception as e:
+            print(f"警告: 后端图片转 Base64 失败，回退到使用原 URL 请求大模型: {e}")
+            image_input = image_url
         
     # 调用阿里通义千问多模态模型 (Qwen-VL-Max) 进行反推
     qwen_api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"

@@ -841,6 +841,99 @@
             border-color: var(--neon-blue);
             box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
         }
+
+        /* 3.0 本地图片上传区样式 */
+        .upload-zone {
+            border: 2px dashed rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            padding: 30px 20px;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 150px;
+        }
+
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: var(--neon-blue);
+            background: rgba(0, 240, 255, 0.03);
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.1);
+        }
+
+        .upload-zone i {
+            font-size: 36px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            transition: color 0.3s;
+        }
+
+        .upload-zone:hover i, .upload-zone.dragover i {
+            color: var(--neon-blue);
+        }
+
+        .upload-text {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .upload-preview-container {
+            position: relative;
+            width: 100%;
+            max-height: 300px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .upload-preview-img {
+            width: 100%;
+            max-height: 300px;
+            object-fit: contain;
+            display: block;
+            margin: 0 auto;
+            background: #000;
+        }
+
+        .btn-delete-img {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 0, 80, 0.8);
+            border: 1px solid #ff0050;
+            color: #fff;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 0 10px rgba(255, 0, 80, 0.4);
+            z-index: 10;
+        }
+
+        .btn-delete-img:hover {
+            transform: scale(1.1);
+            background: #ff0050;
+            box-shadow: 0 0 15px rgba(255, 0, 80, 0.7);
+        }
+
+        .btn-glow-pink {
+            border-color: var(--neon-pink) !important;
+            color: var(--neon-pink) !important;
+        }
+        
+        .btn-glow-pink:hover {
+            background: rgba(255, 0, 127, 0.08) !important;
+            box-shadow: 0 0 15px rgba(255, 0, 127, 0.25) !important;
+        }
     </style>
 </head>
 <body>
@@ -922,8 +1015,98 @@
             </div>
         </div>
 
-        <!-- 2.0 创意提示词工坊卡片 -->
+        <!-- 3.0 本地图片智能反推工坊 -->
         <div class="glass-card">
+            <div class="section-title">
+                <span><i class="fa-solid fa-image" style="color: var(--neon-blue)"></i> 3.0 本地图片智能反推</span>
+                <span style="font-size:11px; font-weight:normal; text-transform:none; color:var(--neon-pink)">
+                    本地灵感图一键还原提示词
+                </span>
+            </div>
+            
+            <div style="margin-top: 15px; display:flex; flex-direction:column; gap:15px;">
+                <!-- 隐藏的隐藏文件输入框 -->
+                <input 
+                    type="file" 
+                    ref="localFileInput" 
+                    style="display:none" 
+                    accept="image/*" 
+                    @change="handleLocalImageUpload"
+                >
+                
+                <!-- 上传拖拽区域 -->
+                <div 
+                    v-if="!uploadedImage"
+                    class="upload-zone"
+                    :class="{ dragover: isDragOver }"
+                    @click="triggerLocalFileInput"
+                    @dragover.prevent="isDragOver = true"
+                    @dragleave.prevent="isDragOver = false"
+                    @drop.prevent="handleLocalImageDrop"
+                >
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <div class="upload-text">
+                        拖拽本地灵感图片到这里，或 <span style="color: var(--neon-blue); text-decoration: underline;">点击浏览上传</span>
+                        <br>
+                        <span style="font-size:11px; color:var(--text-secondary)">支持 JPG、PNG、WEBP 等常见格式</span>
+                    </div>
+                </div>
+                
+                <!-- 图片预览区 -->
+                <div v-else class="upload-preview-container">
+                    <img :src="uploadedImage" alt="本地上传预览" class="upload-preview-img">
+                    <button class="btn-delete-img" @click="clearLocalImage" title="清除当前图片">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+                
+                <!-- 方案配置及分析触发 -->
+                <div v-if="uploadedImage" style="display:flex; gap:12px; align-items:center;">
+                    <select 
+                        v-model="localReverseMode" 
+                        class="select-glass" 
+                        title="选择反推提示词方案"
+                    >
+                        <option value="2">方案二：叙事长段融合</option>
+                        <option value="1">方案一：十维结构拆解</option>
+                    </select>
+                    <button 
+                        class="btn-primary" 
+                        style="flex: 2; height:45px; border-radius:12px;"
+                        :disabled="localReversing"
+                        @click="triggerLocalAiReverse"
+                    >
+                        <span v-if="localReversing"><i class="fa-solid fa-spinner fa-spin"></i> AI 画面深度分析中...</span>
+                        <span v-else><i class="fa-solid fa-robot"></i> 智能反推并还原提示词</span>
+                    </button>
+                </div>
+                
+                <!-- 分析结果展示区 -->
+                <div v-if="localReversedPrompt" style="margin-top: 5px;">
+                    <div class="section-title">
+                        <span>AI 智能分析还原提示词结果</span>
+                    </div>
+                    <div class="prompt-box" style="border-color: rgba(0, 240, 255, 0.25); background:rgba(0,0,0,0.3); font-size:13px; line-height:1.6; margin-bottom:0;">
+                        <div>{{ localReversedPrompt }}</div>
+                        <button class="btn-copy-float" @click="copyText(localReversedPrompt)" title="复制AI反推提示词" style="bottom:12px; right:12px;">
+                            <i class="fa-solid fa-copy" style="color: var(--neon-blue)"></i>
+                        </button>
+                    </div>
+                    <div style="margin-top: 12px; display:flex; gap:10px;">
+                        <button class="btn-secondary" style="flex:1;" @click="copyText(localReversedPrompt)">
+                            <i class="fa-solid fa-copy"></i> 复制提示词
+                        </button>
+                        <button class="btn-secondary btn-glow-pink" style="flex:1;" @click="sendToInspiration">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> ✨ 送入创意工坊再润色
+                        </button>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+
+        <!-- 2.0 创意提示词工坊卡片 -->
+        <div id="prompt-workshop" class="glass-card">
             <div class="section-title">
                 <span><i class="fa-solid fa-wand-magic-sparkles" style="color: var(--neon-pink)"></i> 2.0 创意提示词工坊</span>
                 <span style="font-size:11px; font-weight:normal; text-transform:none; color:var(--neon-blue)">
@@ -1292,6 +1475,106 @@
                 
                 // 新增作者列表
                 const authorsList = ref([]);
+
+                // 3.0 本地图片反推工坊响应式状态
+                const uploadedImage = ref('');
+                const localReversing = ref(false);
+                const localReversedPrompt = ref('');
+                const localReverseMode = ref('2');
+                const isDragOver = ref(false);
+                const localFileInput = ref(null);
+
+                const triggerLocalFileInput = () => {
+                    if (localFileInput.value) {
+                        localFileInput.value.click();
+                    }
+                };
+
+                const handleLocalImageUpload = (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    processFile(file);
+                };
+
+                const handleLocalImageDrop = (e) => {
+                    isDragOver.value = false;
+                    const file = e.dataTransfer.files[0];
+                    if (!file) return;
+                    processFile(file);
+                };
+
+                const processFile = (file) => {
+                    if (!file.type.startsWith('image/')) {
+                        showToast('请选择有效的图片文件！');
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        uploadedImage.value = event.target.result;
+                        localReversedPrompt.value = ''; // 载入新图时重置前一次的反推词
+                        showToast('本地图片载入成功！');
+                    };
+                    reader.readAsDataURL(file);
+                };
+
+                const clearLocalImage = () => {
+                    uploadedImage.value = '';
+                    localReversedPrompt.value = '';
+                    if (localFileInput.value) {
+                        localFileInput.value.value = '';
+                    }
+                    showToast('已清除当前上传图片。');
+                };
+
+                const triggerLocalAiReverse = async () => {
+                    if (!uploadedImage.value) {
+                        showToast("请先选择或拖入一张图片");
+                        return;
+                    }
+                    if (!apiKey.value.trim()) {
+                        showSettings.value = true;
+                        showToast("使用 AI 反推必须先配置通义千问 API Key");
+                        return;
+                    }
+
+                    localReversing.value = true;
+                    localReversedPrompt.value = '';
+
+                    try {
+                        const response = await fetch('/api/reverse', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                image_base64: uploadedImage.value,
+                                api_key: apiKey.value.trim(),
+                                mode: localReverseMode.value
+                            })
+                        });
+                        const data = await response.json();
+                        if (data.code === 0) {
+                            localReversedPrompt.value = data.data.reversed_prompt;
+                            showToast("本地图片 AI 分析还原完成！");
+                        } else {
+                            showToast(data.msg);
+                        }
+                    } catch (e) {
+                        showToast("AI 服务端通信异常");
+                    } finally {
+                        localReversing.value = false;
+                    }
+                };
+
+                const sendToInspiration = () => {
+                    if (!localReversedPrompt.value) return;
+                    inspiration.value = localReversedPrompt.value;
+                    showToast("已成功送入创意提示词工坊！已填入创意要素。");
+                    setTimeout(() => {
+                        const target = document.getElementById('prompt-workshop');
+                        if (target) {
+                            target.scrollIntoView({ behavior: 'smooth' });
+                        }
+                    }, 100);
+                };
 
                 // 作者公开作品列表及筛选状态
                 const authorWorks = ref(null);
@@ -1767,7 +2050,20 @@
                     promptGenerating,
                     promptResultA,
                     promptResultB,
-                    generatePrompt
+                    generatePrompt,
+                    // 3.0 本地图片反推工坊导出
+                    uploadedImage,
+                    localReversing,
+                    localReversedPrompt,
+                    localReverseMode,
+                    isDragOver,
+                    localFileInput,
+                    triggerLocalFileInput,
+                    handleLocalImageUpload,
+                    handleLocalImageDrop,
+                    clearLocalImage,
+                    triggerLocalAiReverse,
+                    sendToInspiration
                 };
             }
         }).mount('#app');
