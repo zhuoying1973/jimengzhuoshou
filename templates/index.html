@@ -1024,6 +1024,11 @@
             <div class="authors-title">
                 <i class="fa-solid fa-users" style="color: var(--neon-blue)"></i>
                 <span>已收录的创作者名录 (点击直接检索):</span>
+                <select v-model="authorSortKey" class="select-glass" style="height: 24px; padding: 0 28px 0 8px; font-size: 11px; border-radius: 6px; width: auto; margin-left: 12px; line-height: 22px; cursor: pointer; outline: none; border-color: rgba(255,255,255,0.08);">
+                    <option value="alpha">按字母 A-Z</option>
+                    <option value="worksDesc">作品数：多到少</option>
+                    <option value="worksAsc">作品数：少到多</option>
+                </select>
                 <span class="authors-summary" style="margin-left: auto; font-size: 11px; color: var(--text-secondary); font-weight: normal; display: flex; gap: 4px; align-items: center;">
                     共计
                     <strong style="color: var(--neon-blue); font-weight: 700;">{{ totalAuthors }}</strong> 个作者
@@ -1050,7 +1055,7 @@
 
                 <!-- 创作者列表 -->
                 <div 
-                    v-for="author in authorsList" 
+                    v-for="author in sortedAuthorsList" 
                     :key="author.sec_uid" 
                     class="author-card"
                     :class="{ active: !isShowingFavorites && result && result.sec_uid === author.sec_uid }"
@@ -1588,6 +1593,7 @@
                 ]);
                 
                 const authorsList = ref([]);
+                const authorSortKey = ref('alpha');
                 const uploadedImage = ref('');
                 const localReversing = ref(false);
                 const localReversedPrompt = ref('');
@@ -1619,9 +1625,7 @@
                         const response = await fetch('/api/authors/list');
                         const data = await response.json();
                         if (data.code === 0) {
-                            authorsList.value = data.data.sort((a, b) => {
-                                return (a.author_name || '').localeCompare(b.author_name || '', 'zh-CN');
-                            });
+                            authorsList.value = data.data;
                         }
                     } catch (e) {
                         console.error("加载作者名录失败", e);
@@ -1895,6 +1899,18 @@
                     return authorsList.value.reduce((sum, author) => sum + (author.works_count || 0), 0);
                 });
 
+                const sortedAuthorsList = computed(() => {
+                    const list = [...authorsList.value];
+                    if (authorSortKey.value === 'alpha') {
+                        return list.sort((a, b) => (a.author_name || '').localeCompare(b.author_name || '', 'zh-CN'));
+                    } else if (authorSortKey.value === 'worksDesc') {
+                        return list.sort((a, b) => (b.works_count || 0) - (a.works_count || 0));
+                    } else if (authorSortKey.value === 'worksAsc') {
+                        return list.sort((a, b) => (a.works_count || 0) - (b.works_count || 0));
+                    }
+                    return list;
+                });
+
                 const filteredWorks = computed(() => {
                     let list = isShowingFavorites.value ? [...favoriteWorks.value] : (authorWorks.value ? [...authorWorks.value.works] : []);
                     if (filterHasPrompt.value) list = list.filter(w => w.has_prompt || (w.prompt && w.prompt.trim().length > 0));
@@ -2069,6 +2085,8 @@
                     onVideoUnmount,
                     totalAuthors,
                     totalWorks,
+                    authorSortKey,
+                    sortedAuthorsList,
                     // 2.0 创意工坊导出
                     styleTags,
                     cameraTags,
