@@ -1024,6 +1024,11 @@
             <div class="authors-title">
                 <i class="fa-solid fa-users" style="color: var(--neon-blue)"></i>
                 <span>已收录的创作者名录 (点击直接检索):</span>
+                <span class="authors-summary" style="margin-left: auto; font-size: 11px; color: var(--text-secondary); font-weight: normal; display: flex; gap: 4px; align-items: center;">
+                    共计
+                    <strong style="color: var(--neon-blue); font-weight: 700;">{{ totalAuthors }}</strong> 个作者
+                    <strong style="color: var(--neon-pink); font-weight: 700; margin-left: 8px;">{{ totalWorks }}</strong> 个作品
+                </span>
             </div>
             <div class="authors-list">
                 <!-- ⭐ 优秀词收集夹入口卡片 -->
@@ -1883,6 +1888,11 @@
                     }
                 };
 
+                const totalAuthors = computed(() => authorsList.value.length);
+                const totalWorks = computed(() => {
+                    return authorsList.value.reduce((sum, author) => sum + (author.works_count || 0), 0);
+                });
+
                 const filteredWorks = computed(() => {
                     let list = isShowingFavorites.value ? [...favoriteWorks.value] : (authorWorks.value ? [...authorWorks.value.works] : []);
                     if (filterHasPrompt.value) list = list.filter(w => w.has_prompt || (w.prompt && w.prompt.trim().length > 0));
@@ -2055,6 +2065,8 @@
                     copyText,
                     formatCount,
                     onVideoUnmount,
+                    totalAuthors,
+                    totalWorks,
                     // 2.0 创意工坊导出
                     styleTags,
                     cameraTags,
