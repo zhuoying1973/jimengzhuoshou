@@ -318,6 +318,113 @@ def get_author_works():
             
     return jsonify({"code": 0, "data": author_info})
 
+# 3.0.5 补全接口：获取已收录的创作者名录（修复此前大清洗误删的 Bug）
+@app.route('/api/authors/list', methods=['GET'])
+def get_authors_list():
+    cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scratch")
+    cache_path = os.path.join(cache_dir, "parsed_authors_cache.json")
+    
+    if not os.path.exists(cache_path):
+        return jsonify({"code": 0, "data": []})
+        
+    try:
+        with open(cache_path, "r", encoding="utf-8") as f:
+            cache_data = json.load(f)
+    except Exception:
+        return jsonify({"code": -1, "msg": "读取本地数据库失败"}), 500
+        
+    authors = []
+    for sec_uid, info in cache_data.items():
+        authors.append({
+            "sec_uid": sec_uid,
+            "author_name": info.get("author_name", "新收录创作者"),
+            "author_avatar": info.get("author_avatar", ""),
+            "works_count": len(info.get("works", []))
+        })
+        
+    # 按照作品数量倒序，让作品多的作者排在前面
+    authors.sort(key=lambda x: x["works_count"], reverse=True)
+    return jsonify({"code": 0, "data": authors})
+
+# 3.5 新增接口：获取用户收集的优秀提示词作品集
+@app.route('/api/favorite/list', methods=['GET'])
+def get_favorites_list():
+    cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scratch")
+    fav_path = os.path.join(cache_dir, "favorites_cache.json")
+    
+    if not os.path.exists(fav_path):
+        return jsonify({"code": 0, "data": []})
+        
+    try:
+        with open(fav_path, "r", encoding="utf-8") as f:
+            fav_data = json.load(f)
+        return jsonify({"code": 0, "data": fav_data})
+    except Exception:
+        return jsonify({"code": -1, "msg": "读取收集夹失败"}), 500
+
+# 3.5 新增接口：将指定作品收集到本地词库中
+@app.route('/api/favorite/add', methods=['POST'])
+def add_favorite():
+    data = request.json or {}
+    work = data.get("work")
+    if not work or not work.get("id"):
+        return jsonify({"code": -1, "msg": "收集作品参数无效"}), 400
+        
+    cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scratch")
+    os.makedirs(cache_dir, exist_ok=True)
+    fav_path = os.path.join(cache_dir, "favorites_cache.json")
+    
+    fav_data = []
+    if os.path.exists(fav_path):
+        try:
+            with open(fav_path, "r", encoding="utf-8") as f:
+                fav_data = json.load(f)
+        except Exception:
+            pass
+            
+    # 查重，防止重复收集
+    for item in fav_data:
+        if item["id"] == work["id"]:
+            return jsonify({"code": 0, "msg": "该作品已在您的收集夹中"})
+            
+    fav_data.append(work)
+    
+    try:
+        with open(fav_path, "w", encoding="utf-8") as f:
+            json.dump(fav_data, f, ensure_ascii=False, indent=2)
+        return jsonify({"code": 0, "msg": "成功加入收集夹"})
+    except Exception as e:
+        return jsonify({"code": -1, "msg": f"写入收集数据库失败: {str(e)}"}), 500
+
+# 3.5 新增接口：取消收集指定作品
+@app.route('/api/favorite/remove', methods=['POST'])
+def remove_favorite():
+    data = request.json or {}
+    work_id = data.get("id")
+    if not work_id:
+        return jsonify({"code": -1, "msg": "取消收集参数无效"}), 400
+        
+    cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scratch")
+    fav_path = os.path.join(cache_dir, "favorites_cache.json")
+    
+    if not os.path.exists(fav_path):
+        return jsonify({"code": 0, "msg": "取消成功"})
+        
+    try:
+        with open(fav_path, "r", encoding="utf-8") as f:
+            fav_data = json.load(f)
+    except Exception:
+        return jsonify({"code": -1, "msg": "读取收集夹失败"}), 500
+        
+    new_fav_data = [item for item in fav_data if item["id"] != work_id]
+    
+    try:
+        with open(fav_path, "w", encoding="utf-8") as f:
+            json.dump(new_fav_data, f, ensure_ascii=False, indent=2)
+        return jsonify({"code": 0, "msg": "已从收集夹移除"})
+    except Exception as e:
+        return jsonify({"code": -1, "msg": f"更新收集数据库失败: {str(e)}"}), 500
+
 # 3.5 2.0 新增接口：AI 创意提示词工坊，将基本创意智能扩写为 15秒电影级短视频双版本词
 @app.route('/api/prompt/generate', methods=['POST'])
 def generate_prompt():

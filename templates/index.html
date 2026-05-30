@@ -934,6 +934,39 @@
             background: rgba(255, 0, 127, 0.08) !important;
             box-shadow: 0 0 15px rgba(255, 0, 127, 0.25) !important;
         }
+
+        /* 3.5 收藏夹与 UI 布局微调样式 */
+        .favorite-icon-wrapper {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(255, 0, 127, 0.1);
+            border: 1px solid rgba(255, 0, 127, 0.3);
+            transition: all 0.3s;
+        }
+
+        .author-card.active .favorite-icon-wrapper {
+            background: rgba(255, 0, 127, 0.2);
+            border-color: var(--neon-pink);
+            box-shadow: 0 0 10px rgba(255, 0, 127, 0.4);
+        }
+
+        .badge-fav {
+            font-size: 9px;
+            font-weight: 800;
+            color: #fff;
+            background: linear-gradient(135deg, #ff007f, #ff5500);
+            padding: 3px 8px;
+            border-radius: 8px;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 8px rgba(255, 0, 127, 0.4);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
     </style>
 </head>
 <body>
@@ -951,17 +984,33 @@
         </header>
 
         <!-- 已收录创作者名录栏 -->
-        <div v-if="authorsList.length > 0" class="authors-scroll-container">
+        <div class="authors-scroll-container">
             <div class="authors-title">
                 <i class="fa-solid fa-users" style="color: var(--neon-blue)"></i>
                 <span>已收录的创作者名录 (点击直接检索):</span>
             </div>
             <div class="authors-list">
+                <!-- ⭐ 优秀词收集夹入口卡片 -->
+                <div 
+                    class="author-card"
+                    :class="{ active: isShowingFavorites }"
+                    @click="selectFavoritesTab"
+                >
+                    <div class="favorite-icon-wrapper">
+                        <i class="fa-solid fa-star" style="color: var(--neon-pink)"></i>
+                    </div>
+                    <div class="author-card-info">
+                        <span class="author-card-name" style="color: var(--neon-pink); font-weight:700;">优秀词收集夹</span>
+                        <span class="author-card-count">已收集 {{ favoriteWorks.length }} 部</span>
+                    </div>
+                </div>
+
+                <!-- 创作者列表 -->
                 <div 
                     v-for="author in authorsList" 
                     :key="author.sec_uid" 
                     class="author-card"
-                    :class="{ active: result && result.sec_uid === author.sec_uid }"
+                    :class="{ active: !isShowingFavorites && result && result.sec_uid === author.sec_uid }"
                     @click="selectActiveAuthor(author)"
                 >
                     <img class="author-card-avatar" :src="author.author_avatar || 'https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/common/images/dreamina-v5.ico'" alt="头像">
@@ -1012,6 +1061,220 @@
                     <span v-if="loading"><i class="fa-solid fa-spinner fa-spin"></i> 解析中</span>
                     <span v-else><i class="fa-solid fa-bolt"></i> 一键提取</span>
                 </button>
+            </div>
+        </div>
+
+        <!-- 骨架屏加载 -->
+        <div v-if="loading" class="glass-card loading-card">
+            <div class="author-info">
+                <div class="author-avatar skeleton"></div>
+                <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
+                    <div class="loading-line skeleton" style="width: 40%"></div>
+                    <div class="loading-line skeleton" style="width: 25%"></div>
+                </div>
+            </div>
+            <div class="skeleton" style="height: 320px; border-radius: 16px;"></div>
+            <div class="loading-line skeleton" style="width: 90%"></div>
+            <div class="loading-line skeleton" style="width: 70%"></div>
+        </div>
+
+        <!-- 解析结果卡片 -->
+        <div v-if="result && !loading" class="glass-card">
+            <!-- 作者信息 -->
+            <div class="result-header">
+                <div class="author-info">
+                    <img class="author-avatar" :src="result.avatar" alt="头像">
+                    <div>
+                        <div class="author-name">{{ result.author }}</div>
+                        <div class="author-tag">作品 ID: {{ result.id }}</div>
+                    </div>
+                </div>
+                <!-- 快捷复制视频 -->
+                <a v-if="result.video_url" download :href="'/api/download?url=' + encodeURIComponent(result.video_url)" class="btn-icon" title="直接下载原片">
+                    <i class="fa-solid fa-download" style="color: var(--neon-blue)"></i>
+                </a>
+            </div>
+
+            <!-- 视频预览 -->
+            <div v-if="result.video_url" class="media-preview">
+                <video :key="result.id" :src="'/api/download?url=' + encodeURIComponent(result.video_url)" controls autoplay loop playsinline @vnode-before-unmount="onVideoUnmount"></video>
+            </div>
+            <!-- 静态图/封面预览 -->
+            <div v-else-if="result.cover_url" class="media-preview">
+                <img :src="result.cover_url" alt="封面图">
+            </div>
+
+            <!-- 下载与反推功能面板 -->
+            <div class="action-row">
+                <a 
+                    v-if="result.video_url" 
+                    download
+                    :href="'/api/download?url=' + encodeURIComponent(result.video_url)"
+                    class="btn-secondary btn-glow-blue" 
+                    style="text-decoration: none;"
+                >
+                    <i class="fa-solid fa-film"></i> 下载无水印原片
+                </a>
+                <select 
+                    v-model="reverseMode" 
+                    class="select-glass" 
+                    title="选择反推提示词方案"
+                >
+                    <option value="2">方案二：叙事长段融合</option>
+                    <option value="1">方案一：十维结构拆解</option>
+                </select>
+
+                <!-- ⭐ 收藏提示词按钮 -->
+                <button 
+                    class="btn-secondary"
+                    :class="{ 'btn-glow-pink': isWorkFavorited(result.id) }"
+                    @click="toggleFavorite(result)"
+                >
+                    <i class="fa-solid fa-star" :style="{ color: isWorkFavorited(result.id) ? 'var(--neon-pink)' : 'var(--text-secondary)' }"></i>
+                    <span>{{ isWorkFavorited(result.id) ? '已收集该词' : '收集提示词' }}</span>
+                </button>
+
+                <button 
+                    class="btn-secondary" 
+                    :disabled="reversing"
+                    @click="triggerAiReverse"
+                >
+                    <span v-if="reversing"><i class="fa-solid fa-spinner fa-spin"></i> AI 反推中...</span>
+                    <span v-else><i class="fa-solid fa-robot" style="color: var(--neon-pink)"></i> AI 智能反推提示词</span>
+                </button>
+            </div>
+
+            <!-- 抓取出的原版提示词 -->
+            <div class="section-title">
+                <span>原版提示词描述 (Description)</span>
+                <span style="font-size:11px; font-weight:normal; text-transform:none;">
+                    {{ result.prompt ? '字数: ' + result.prompt.length : '未检测到长描述' }}
+                </span>
+            </div>
+            <div class="prompt-box">
+                <div v-if="result.prompt">{{ result.prompt }}</div>
+                <div v-else style="color: var(--text-secondary); font-style: italic;">
+                    此作品未检测到长提示词。作者在发布时可能将提示词替换成了空或极简标题。您可以点击上方【AI 智能反推】通过画面重构提示词。
+                </div>
+                <button v-if="result.prompt" class="btn-copy-float" @click="copyText(result.prompt)" title="复制原版提示词">
+                    <i class="fa-solid fa-copy"></i>
+                </button>
+            </div>
+
+            <!-- AI 反推的提示词结果 -->
+            <div v-if="reversedPrompt">
+                <div class="section-title">
+                    <span>AI 智能反向重构提示词 (Prompt)</span>
+                </div>
+                <div class="prompt-box" style="border-color: rgba(0, 240, 255, 0.25);">
+                    <div>{{ reversedPrompt }}</div>
+                    <button class="btn-copy-float" @click="copyText(reversedPrompt)" title="复制AI反推提示词">
+                        <i class="fa-solid fa-copy" style="color: var(--neon-blue)"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 创作者公开作品网格卡片 -->
+        <div v-if="((result && authorWorks) || isShowingFavorites) && !loading" class="glass-card">
+            <!-- 网格标题与多选下载 -->
+            <div class="result-header" style="margin-bottom:15px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom:12px;">
+                <div class="author-info" style="flex: 1;">
+                    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <!-- 头像，如果收藏夹展示一个星星头像 -->
+                        <div v-if="isShowingFavorites" class="favorite-icon-wrapper" style="width:38px; height:38px; font-size:18px; border-radius:50%; background:rgba(255,0,127,0.1); border:1px solid var(--neon-pink); display:flex; justify-content:center; align-items:center;">
+                            <i class="fa-solid fa-star" style="color:var(--neon-pink)"></i>
+                        </div>
+                        <img v-else class="author-avatar" :src="authorWorks ? (authorWorks.author_avatar || result.avatar) : result.avatar" alt="头像" style="width:38px; height:38px;">
+                        <div>
+                            <div v-if="isShowingFavorites" class="author-name" style="font-size:14px; color:var(--neon-pink);">优秀词收集夹（我的提示词学习库）</div>
+                            <div v-else class="author-name" style="font-size:14px; color:#fff;">{{ authorWorks ? (authorWorks.author_name || result.author) : result.author }} 的公开作品集</div>
+                            <div class="author-tag" style="font-size:10px;">
+                                <span v-if="isShowingFavorites">共收集了 {{ filteredWorks.length }} 部带提示词的优秀作品（点击卡片展示作品并学习）</span>
+                                <span v-else>共收录 {{ filteredWorks.length }} 部优秀作品（已勾选 {{ selectedWorks.length }} 项）</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 批量下载按钮 -->
+                <button 
+                    v-if="!isShowingFavorites && selectedWorks.length > 0" 
+                    class="btn-primary" 
+                    style="padding: 0 15px; font-size:12px; border-radius:10px; height:34px;"
+                    @click="downloadSelectedWorks"
+                >
+                    <i class="fa-solid fa-cloud-arrow-down"></i> 批量下载选中
+                </button>
+            </div>
+
+            <!-- 筛选与排序控制面板 -->
+            <div class="filter-panel">
+                <!-- 排序 Tabs -->
+                <div class="filter-tabs">
+                    <button :class="{ active: sortKey === 'default' }" @click="sortKey = 'default'">
+                        <i class="fa-solid fa-clock-rotate-left"></i> 最新发布
+                    </button>
+                    <button :class="{ active: sortKey === 'like' }" @click="sortKey = 'like'">
+                        <i class="fa-solid fa-heart" style="color:var(--neon-pink)"></i> 点赞排序
+                    </button>
+                    <button :class="{ active: sortKey === 'usage' }" @click="sortKey = 'usage'">
+                        <i class="fa-solid fa-play" style="color:var(--neon-blue)"></i> 跟拍排序
+                    </button>
+                </div>
+                
+                <!-- 过滤 Switches -->
+                <div class="filter-switches">
+                    <label class="switch-container">
+                        <input type="checkbox" v-model="filterHasPrompt">
+                        <span class="switch-label"><i class="fa-solid fa-font" style="color:var(--neon-pink)"></i> 仅看带提示词</span>
+                    </label>
+                    <label class="switch-container">
+                        <input type="checkbox" v-model="filterHasEpisodes">
+                        <span class="switch-label"><i class="fa-solid fa-film" style="color:var(--neon-blue)"></i> 仅看续集</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 作品缩略图自适应网格 -->
+            <div class="works-grid">
+                <div 
+                    v-for="work in filteredWorks" 
+                    :key="work.id" 
+                    class="work-card" 
+                    :class="{ active: result && result.id === work.id }"
+                >
+                    <!-- 多选 Checkbox -->
+                    <div v-if="!isShowingFavorites" class="work-checkbox" @click.stop>
+                        <input type="checkbox" :value="work.id" v-model="selectedWorks">
+                    </div>
+                    
+                    <!-- 缩略图预览及点击切换 -->
+                    <div class="work-thumb-wrapper" @click="selectWork(work)">
+                        <img :src="work.cover_url" alt="封面" class="work-thumb-img">
+                        
+                        <!-- 角标叠加层 -->
+                        <div class="work-badge-layer">
+                            <!-- 提示词角标 -->
+                            <span v-if="work.has_prompt || (work.prompt && work.prompt.trim())" class="badge-prompt">
+                                <i class="fa-solid fa-font"></i> PROMPT
+                            </span>
+                            <!-- 续集标识 -->
+                            <span v-if="work.episodes_count > 1" class="badge-episodes">
+                                <i class="fa-solid fa-film"></i> {{ work.episodes_count }}集续集
+                            </span>
+                            <!-- 收藏角标 -->
+                            <span v-if="isWorkFavorited(work.id)" class="badge-fav">
+                                <i class="fa-solid fa-star"></i> 已收集
+                            </span>
+                        </div>
+                        
+                        <!-- 数据统计毛玻璃浮层 -->
+                        <div class="work-stats-bar">
+                            <span><i class="fa-solid fa-heart" style="color:var(--neon-pink)"></i> {{ formatCount(work.like_count) }}</span>
+                            <span><i class="fa-solid fa-play" style="color:var(--neon-blue)"></i> {{ formatCount(work.usage_count) }}跟拍</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1446,9 +1709,8 @@
                 const reversedPrompt = ref('');
                 const showSettings = ref(false);
                 const apiKey = ref('');
-                const reverseMode = ref('2'); // 默认使用方案二叙事长段融合
+                const reverseMode = ref('2'); 
                 
-                // 2.0 创意提示词工坊响应式状态
                 const inspiration = ref('');
                 const promptStyle = ref('90年代港风武侠');
                 const promptCamera = ref('360度环绕慢动作');
@@ -1473,16 +1735,107 @@
                     '欢快爵士乐 (BGM) + 玻璃清脆敲击声'
                 ]);
                 
-                // 新增作者列表
                 const authorsList = ref([]);
-
-                // 3.0 本地图片反推工坊响应式状态
                 const uploadedImage = ref('');
                 const localReversing = ref(false);
                 const localReversedPrompt = ref('');
                 const localReverseMode = ref('2');
                 const isDragOver = ref(false);
                 const localFileInput = ref(null);
+                const favoriteWorks = ref([]);
+                const isShowingFavorites = ref(false);
+                const authorWorks = ref(null);
+                const selectedWorks = ref([]);
+                const sortKey = ref('default'); 
+                const filterHasPrompt = ref(false);
+                const filterHasEpisodes = ref(false);
+                const toast = ref({ show: false, msg: '' });
+
+                const onVideoUnmount = (vnode) => {
+                    const video = vnode.el;
+                    if (video) {
+                        try {
+                            video.pause();
+                            video.src = "";
+                            video.load();
+                        } catch (err) {}
+                    }
+                };
+
+                const loadAuthorsList = async () => {
+                    try {
+                        const response = await fetch('/api/authors/list');
+                        const data = await response.json();
+                        if (data.code === 0) {
+                            authorsList.value = data.data;
+                        }
+                    } catch (e) {
+                        console.error("加载作者名录失败", e);
+                    }
+                };
+
+                const loadFavoritesList = async () => {
+                    try {
+                        const response = await fetch('/api/favorite/list');
+                        const data = await response.json();
+                        if (data.code === 0) {
+                            favoriteWorks.value = data.data;
+                        }
+                    } catch (e) {
+                        console.error("加载收藏夹列表失败", e);
+                    }
+                };
+
+                const selectFavoritesTab = () => {
+                    isShowingFavorites.value = true;
+                    if (result.value) {
+                        result.value.sec_uid = '';
+                    }
+                    loadFavoritesList();
+                    showToast("已切换到优秀词收集夹！");
+                };
+
+                const toggleFavorite = async (work) => {
+                    if (!work || !work.id) return;
+                    const isFav = isWorkFavorited(work.id);
+                    const url = isFav ? '/api/favorite/remove' : '/api/favorite/add';
+                    
+                    const payload = isFav ? { id: work.id } : {
+                        work: {
+                            id: work.id,
+                            title: work.title || work.prompt || '未命名作品',
+                            prompt: work.prompt || '',
+                            cover_url: work.cover_url || '',
+                            video_url: work.video_url || '',
+                            like_count: work.like_count || 0,
+                            usage_count: work.usage_count || 0,
+                            author: work.author || result.value?.author || '未知创作者',
+                            avatar: work.avatar || result.value?.avatar || '',
+                            sec_uid: work.sec_uid || result.value?.sec_uid || ''
+                        }
+                    };
+
+                    try {
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        const data = await response.json();
+                        if (data.code === 0) {
+                            showToast(isFav ? "已从收集夹移除" : "成功收集该提示词作品！");
+                            await loadFavoritesList();
+                        } else {
+                            showToast(data.msg);
+                        }
+                    } catch (err) {
+                        showToast("收集夹接口网络调用异常");
+                    }
+                };
+
+                const isWorkFavorited = (id) => {
+                    return favoriteWorks.value.some(w => w.id === id);
+                };
 
                 const triggerLocalFileInput = () => {
                     if (localFileInput.value) {
@@ -1511,7 +1864,7 @@
                     const reader = new FileReader();
                     reader.onload = (event) => {
                         uploadedImage.value = event.target.result;
-                        localReversedPrompt.value = ''; // 载入新图时重置前一次的反推词
+                        localReversedPrompt.value = '';
                         showToast('本地图片载入成功！');
                     };
                     reader.readAsDataURL(file);
@@ -1576,71 +1929,25 @@
                     }, 100);
                 };
 
-                // 作者公开作品列表及筛选状态
-                const authorWorks = ref(null);
-                const selectedWorks = ref([]);
-                const sortKey = ref('default'); // 'default', 'like', 'usage'
-                const filterHasPrompt = ref(false);
-                const filterHasEpisodes = ref(false);
-
-                const toast = ref({
-                    show: false,
-                    msg: ''
-                });
-
-                // 强制卸载视频播放器，瞬间斩断流媒体残留
-                const onVideoUnmount = (vnode) => {
-                    const video = vnode.el;
-                    if (video) {
-                        try {
-                            video.pause();
-                            video.src = "";
-                            video.load();
-                        } catch (err) {}
-                    }
-                };
-
                 onMounted(() => {
-                    // 读取本地存储的配置
                     const storedKey = localStorage.getItem("qwen_api_key");
-                    if (storedKey) {
-                        apiKey.value = storedKey;
-                    }
-                    
-                    // 初始化加载已收录创作者名录
+                    if (storedKey) apiKey.value = storedKey;
                     loadAuthorsList();
+                    loadFavoritesList();
                 });
 
-                const toggleSettings = () => {
-                    showSettings.value = !showSettings.value;
-                };
-
-                const saveSettings = () => {
-                    localStorage.setItem("qwen_api_key", apiKey.value.trim());
-                    showToast("配置已成功本地保存！");
-                };
+                const toggleSettings = () => { showSettings.value = !showSettings.value; };
 
                 const showToast = (msg) => {
                     toast.value.msg = msg;
                     toast.value.show = true;
-                    
-                    // 智能时长计算：每个字多给 80 毫秒，下限 3 秒，上限 10 秒，保证能看清长文本
                     const duration = Math.min(10000, Math.max(3000, msg.length * 80));
-                    
-                    // 清除上一轮正在倒计时的定时器，防止提示气泡“打架”被提前收回
-                    if (window.toastTimer) {
-                        clearTimeout(window.toastTimer);
-                    }
-                    
-                    window.toastTimer = setTimeout(() => {
-                        toast.value.show = false;
-                    }, duration);
+                    if (window.toastTimer) clearTimeout(window.toastTimer);
+                    window.toastTimer = setTimeout(() => { toast.value.show = false; }, duration);
                 };
 
                 const handleParse = async () => {
                     if (!shareInput.value.trim()) return;
-                    
-                    // 强行暂停并清空所有已有播放器，杜绝音频流缓存残留
                     const videoElements = document.querySelectorAll('video');
                     videoElements.forEach(video => {
                         try {
@@ -1651,9 +1958,8 @@
                     });
 
                     loading.value = true;
-                    result.value = null;
                     reversedPrompt.value = '';
-                    authorWorks.value = null;
+                    isShowingFavorites.value = false;
                     selectedWorks.value = [];
 
                     try {
@@ -1663,75 +1969,36 @@
                             body: JSON.stringify({ url: shareInput.value.trim() })
                         });
                         const data = await response.json();
-                        
                         if (data.code === 0) {
-                            showToast("解析成功！");
                             if (data.data.is_author_only) {
-                                // 1. 如果是创作者主页或ID，拉取列表
-                                await loadAuthorWorks(data.data.sec_uid);
-                                // 2. 拉取成功后，自动将网格中第一个最新作品作为当前主视频进行展示
-                                if (authorWorks.value && authorWorks.value.works && authorWorks.value.works.length > 0) {
-                                    const firstWork = authorWorks.value.works[0];
-                                    result.value = {
-                                        id: firstWork.id,
-                                        author: authorWorks.value.author_name || data.data.author,
-                                        avatar: authorWorks.value.author_avatar || data.data.avatar,
-                                        sec_uid: data.data.sec_uid,
-                                        prompt: firstWork.prompt,
-                                        video_url: firstWork.video_url,
-                                        cover_url: firstWork.cover_url,
-                                        like_count: firstWork.like_count,
-                                        usage_count: firstWork.usage_count
-                                    };
-                                } else {
-                                    result.value = data.data; // 退回显示纯作者信息
-                                }
+                                result.value = { sec_uid: data.data.sec_uid, author: data.data.author, avatar: data.data.avatar };
+                                showToast(`成功收录创作者主页：${data.data.author}`);
                             } else {
-                                // 正常的单个作品解析
                                 result.value = data.data;
-                                // 自动拉取该创作者的作品网格
-                                if (data.data.sec_uid) {
-                                    await loadAuthorWorks(data.data.sec_uid);
-                                }
+                                showToast(`解析成功：创作者《${data.data.author}》`);
                             }
-                            // 每次成功解析新作者或新作品，更新名录作品数量
                             await loadAuthorsList();
+                            await loadAuthorWorks(data.data.sec_uid);
+                            shareInput.value = '';
                         } else {
-                            showToast("解析失败: " + data.msg);
+                            showToast("解析失败：" + data.msg);
                         }
-                    } catch (e) {
-                        showToast("连接本地服务端失败");
+                    } catch (err) {
+                        showToast("服务端解析接口异常，请确认网络连接");
                     } finally {
                         loading.value = false;
                     }
                 };
 
-                // 加载已收录作者名录列表
-                const loadAuthorsList = async () => {
-                    try {
-                        const response = await fetch('/api/authors/list');
-                        const data = await response.json();
-                        if (data.code === 0) {
-                            authorsList.value = data.data;
-                        }
-                    } catch (e) {
-                        console.error("加载已收录创作者名录失败", e);
-                    }
-                };
-
-                // 点击已收录作者名录卡片直接检索
                 const selectActiveAuthor = async (author) => {
                     loading.value = true;
+                    isShowingFavorites.value = false;
                     result.value = null;
                     reversedPrompt.value = '';
                     authorWorks.value = null;
                     selectedWorks.value = [];
-                    
                     try {
-                        // 1. 本地加载该作者的所有公开作品
                         await loadAuthorWorks(author.sec_uid);
-                        
-                        // 2. 将作品集中最新一条投映到播放区域展示
                         if (authorWorks.value && authorWorks.value.works && authorWorks.value.works.length > 0) {
                             const firstWork = authorWorks.value.works[0];
                             result.value = {
@@ -1745,13 +2012,8 @@
                                 like_count: firstWork.like_count,
                                 usage_count: firstWork.usage_count
                             };
-                            showToast(`直接检索：创作者《${author.author_name}》`);
                         } else {
-                            result.value = {
-                                sec_uid: author.sec_uid,
-                                author: author.author_name,
-                                avatar: author.author_avatar
-                            };
+                            result.value = { sec_uid: author.sec_uid, author: author.author_name, avatar: author.author_avatar };
                         }
                     } catch (err) {
                         showToast("本地检索作者列表失败");
@@ -1760,177 +2022,83 @@
                     }
                 };
 
-
-
-                // 加载作者公开作品集
                 const loadAuthorWorks = async (secUid) => {
                     try {
-                        const headers = { 'Content-Type': 'application/json' };
                         const response = await fetch('/api/author/works', {
                             method: 'POST',
-                            headers: headers,
+                            headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ sec_uid: secUid })
                         });
                         const data = await response.json();
-                        if (data.code === 0) {
-                            authorWorks.value = data.data;
-                        }
+                        if (data.code === 0) authorWorks.value = data.data;
                     } catch (e) {
                         console.error("加载作者作品列表失败", e);
                     }
                 };
 
-                // 筛选与排序的过滤计算属性
                 const filteredWorks = computed(() => {
-                    if (!authorWorks.value || !authorWorks.value.works) return [];
-                    let list = [...authorWorks.value.works];
-                    
-                    // 1. 过滤：仅看有提示词
-                    if (filterHasPrompt.value) {
-                        list = list.filter(w => w.has_prompt || (w.prompt && w.prompt.trim().length > 0));
-                    }
-                    
-                    // 2. 过滤：仅看续集
-                    if (filterHasEpisodes.value) {
-                        list = list.filter(w => w.episodes_count > 1);
-                    }
-                    
-                    // 3. 排序
-                    if (sortKey.value === 'like') {
-                        list.sort((a, b) => b.like_count - a.like_count);
-                    } else if (sortKey.value === 'usage') {
-                        list.sort((a, b) => b.usage_count - a.usage_count);
-                    }
-                    
+                    let list = isShowingFavorites.value ? [...favoriteWorks.value] : (authorWorks.value ? [...authorWorks.value.works] : []);
+                    if (filterHasPrompt.value) list = list.filter(w => w.has_prompt || (w.prompt && w.prompt.trim().length > 0));
+                    if (filterHasEpisodes.value) list = list.filter(w => w.episodes_count > 1);
+                    if (sortKey.value === 'like') list.sort((a, b) => b.like_count - a.like_count);
+                    else if (sortKey.value === 'usage') list.sort((a, b) => b.usage_count - a.usage_count);
                     return list;
                 });
 
-                // 点击网格中的卡片切换主视频
                 const selectWork = async (work) => {
-                    // 强行暂停并清空所有已有播放器，清除残留音频
                     const videoElements = document.querySelectorAll('video');
-                    videoElements.forEach(video => {
-                        try {
-                            video.pause();
-                            video.src = "";
-                            video.load();
-                        } catch (err) {}
-                    });
-
-                    // 先更新基本信息展示（封面和提示词文字立即呈现）
+                    videoElements.forEach(v => { try { v.pause(); v.src = ""; v.load(); } catch (err) {} });
                     result.value = {
                         id: work.id,
-                        author: authorWorks.value ? (authorWorks.value.author_name || result.value.author) : result.value.author,
-                        avatar: authorWorks.value ? (authorWorks.value.author_avatar || result.value.avatar) : result.value.avatar,
-                        sec_uid: result.value ? result.value.sec_uid : '',
+                        author: work.author || result.value.author,
+                        avatar: work.avatar || result.value.avatar,
+                        sec_uid: work.sec_uid || result.value.sec_uid,
                         prompt: work.prompt,
                         video_url: work.video_url,
                         cover_url: work.cover_url,
                         like_count: work.like_count,
                         usage_count: work.usage_count
                     };
-                    reversedPrompt.value = ''; // 切换时重置大模型反推
-
-                    // 如果检测到该作品还没有无水印视频地址 (例如从书签刚同步过来)
+                    reversedPrompt.value = '';
                     if (!work.video_url) {
-                        showToast(`正在自动获取无水印原片链接...`);
                         try {
-                            const response = await fetch('/api/parse', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ url: `https://jimeng.jianying.com/detail?id=${work.id}` })
-                            });
-                            const data = await response.json();
+                            const res = await fetch('/api/parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: `https://jimeng.jianying.com/detail?id=${work.id}` }) });
+                            const data = await res.json();
                             if (data.code === 0) {
-                                // 自动补齐视频直链并立即更新到播放器
                                 result.value.video_url = data.data.video_url;
-                                work.video_url = data.data.video_url; // 更新网格内的缓存数据
-                                showToast(`原片链接已自动补齐并保存！`);
-                                
-                                // 同步刷新本地已加载的作品集状态
-                                if (authorWorks.value && authorWorks.value.works) {
-                                    const cachedWork = authorWorks.value.works.find(w => w.id === work.id);
-                                    if (cachedWork) cachedWork.video_url = data.data.video_url;
-                                }
-                            } else {
-                                showToast("自动获取原片失败: " + data.msg);
+                                work.video_url = data.data.video_url;
                             }
-                        } catch (err) {
-                            showToast("获取视频直链时网络连接异常");
-                        }
-                    } else {
-                        showToast(`已平滑切换到作品《${work.title}》`);
+                        } catch (err) { showToast("获取视频直链异常"); }
                     }
                 };
 
-                // 批量下载已选中的视频
                 const downloadSelectedWorks = () => {
-                    if (selectedWorks.value.length === 0) return;
-                    showToast(`正在触发批量下载 ${selectedWorks.value.length} 个作品...`);
-                    
                     selectedWorks.value.forEach((workId, index) => {
                         const work = authorWorks.value.works.find(w => w.id === workId);
-                        if (work && work.video_url) {
-                            // 使用少许延时防止浏览器拦截连续弹窗
-                            setTimeout(() => {
-                                downloadVideo(work.video_url);
-                            }, index * 300);
-                        }
+                        if (work && work.video_url) setTimeout(() => downloadVideo(work.video_url), index * 300);
                     });
                 };
 
-                // AI 反推逻辑
                 const triggerAiReverse = async () => {
-                    if (!result.value || !result.value.cover_url) {
-                        showToast("无法获取图片源，请先解析成功");
-                        return;
-                    }
-                    if (!apiKey.value.trim()) {
-                        showSettings.value = true;
-                        showToast("使用 AI 反推必须先配置通义千问 API Key");
-                        return;
-                    }
-
+                    if (!apiKey.value.trim()) { showSettings.value = true; return; }
                     reversing.value = true;
-                    reversedPrompt.value = '';
-
                     try {
-                        const response = await fetch('/api/reverse', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                image_url: result.value.cover_url,
-                                api_key: apiKey.value.trim(),
-                                mode: reverseMode.value
-                            })
-                        });
-                        const data = await response.json();
-                        if (data.code === 0) {
-                            reversedPrompt.value = data.data.reversed_prompt;
-                            showToast("AI 反推重构完成！");
-                        } else {
-                            showToast(data.msg);
-                        }
-                    } catch (e) {
-                        showToast("AI 服务端通信异常");
-                    } finally {
-                        reversing.value = false;
-                    }
+                        const res = await fetch('/api/reverse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image_url: result.value.cover_url, api_key: apiKey.value.trim(), mode: reverseMode.value }) });
+                        const data = await res.json();
+                        if (data.code === 0) reversedPrompt.value = data.data.reversed_prompt;
+                        else showToast(data.msg);
+                    } finally { reversing.value = false; }
                 };
 
-                // 2.0 创意提示词工坊生成逻辑
                 const generatePrompt = async () => {
-                    if (!inspiration.value.trim()) return;
                     if (!apiKey.value.trim()) {
                         showSettings.value = true;
                         showToast("使用创意工坊必须先配置通义千问 API Key");
                         return;
                     }
-
                     promptGenerating.value = true;
                     promptResultA.value = '';
                     promptResultB.value = '';
-
                     try {
                         const response = await fetch('/api/prompt/generate', {
                             method: 'POST',
@@ -1960,18 +2128,6 @@
                     }
                 };
 
-                // 下载视频逻辑（修改为请求本地代理，以穿透 403 防盗链）
-                const downloadVideo = (url) => {
-                    const proxyUrl = `/api/download?url=${encodeURIComponent(url)}`;
-                    const link = document.createElement('a');
-                    link.href = proxyUrl;
-                    // 去掉 target = '_blank'，设置 download 属性在当前页面静默触发下载，防止新窗口静默播放音频
-                    link.download = `jimeng_video_${Date.now()}.mp4`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                };
-
                 // 复制文本到剪贴板
                 const copyText = (text) => {
                     if (navigator.clipboard) {
@@ -1986,17 +2142,17 @@
                 };
 
                 const fallbackCopy = (text) => {
-                    const textArea = document.createElement("textarea");
-                    textArea.value = text;
-                    document.body.appendChild(textArea);
-                    textArea.select();
+                    const textarea = document.createElement("textarea");
+                    textarea.value = text;
+                    document.body.appendChild(textarea);
+                    textarea.select();
                     try {
                         document.execCommand('copy');
                         showToast("已成功复制到剪贴板！");
                     } catch (err) {
                         showToast("复制失败，请手动选择复制");
                     }
-                    document.body.removeChild(textArea);
+                    document.body.removeChild(textarea);
                 };
 
                 // 格式化数字（万）
@@ -2063,7 +2219,13 @@
                     handleLocalImageDrop,
                     clearLocalImage,
                     triggerLocalAiReverse,
-                    sendToInspiration
+                    sendToInspiration,
+                    // 3.5 收藏夹导出
+                    favoriteWorks,
+                    isShowingFavorites,
+                    selectFavoritesTab,
+                    toggleFavorite,
+                    isWorkFavorited
                 };
             }
         }).mount('#app');
