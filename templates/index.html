@@ -1619,7 +1619,9 @@
                         const response = await fetch('/api/authors/list');
                         const data = await response.json();
                         if (data.code === 0) {
-                            authorsList.value = data.data;
+                            authorsList.value = data.data.sort((a, b) => {
+                                return (a.author_name || '').localeCompare(b.author_name || '', 'zh-CN');
+                            });
                         }
                     } catch (e) {
                         console.error("加载作者名录失败", e);
