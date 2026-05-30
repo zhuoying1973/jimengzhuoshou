@@ -1025,6 +1025,7 @@
                 <i class="fa-solid fa-users" style="color: var(--neon-blue)"></i>
                 <span>已收录的创作者名录 (点击直接检索):</span>
                 <select v-model="authorSortKey" class="select-glass" style="height: 24px; padding: 0 28px 0 8px; font-size: 11px; border-radius: 6px; width: auto; margin-left: 12px; line-height: 22px; cursor: pointer; outline: none; border-color: rgba(255,255,255,0.08);">
+                    <option value="default">按收录先后</option>
                     <option value="alpha">按字母 A-Z</option>
                     <option value="worksDesc">作品数：多到少</option>
                     <option value="worksAsc">作品数：少到多</option>
@@ -1593,7 +1594,7 @@
                 ]);
                 
                 const authorsList = ref([]);
-                const authorSortKey = ref('alpha');
+                const authorSortKey = ref('default');
                 const uploadedImage = ref('');
                 const localReversing = ref(false);
                 const localReversedPrompt = ref('');
