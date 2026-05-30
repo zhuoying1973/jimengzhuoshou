@@ -687,13 +687,11 @@
             padding: 10px;
         }
 
-        /* 创作者名录横向滚动区 */
+        /* 创作者名录区 */
         .authors-scroll-container {
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            margin-bottom: 5px;
-            padding: 5px 0;
+            gap: 12px;
         }
         
         .authors-title {
@@ -708,16 +706,17 @@
         
         .authors-list {
             display: flex;
-            gap: 15px;
-            overflow-x: auto;
+            flex-wrap: wrap; /* 允许折行 */
+            gap: 10px 12px;  /* 上下行距 10px，左右列距 12px */
+            max-height: 155px; /* 限制最大高度，大概可容纳 3 行 */
+            overflow-y: auto;  /* 开启垂直滚动 */
             padding: 5px 2px;
-            padding-bottom: 12px;
             scrollbar-width: thin;
             scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
         }
         
         .authors-list::-webkit-scrollbar {
-            height: 4px;
+            width: 4px; /* 垂直滚动条宽度为 4px */
         }
         .authors-list::-webkit-scrollbar-thumb {
             background: rgba(255, 255, 255, 0.15);
@@ -984,7 +983,7 @@
         </header>
 
         <!-- 已收录创作者名录栏 -->
-        <div class="authors-scroll-container">
+        <div class="authors-scroll-container glass-card">
             <div class="authors-title">
                 <i class="fa-solid fa-users" style="color: var(--neon-blue)"></i>
                 <span>已收录的创作者名录 (点击直接检索):</span>
