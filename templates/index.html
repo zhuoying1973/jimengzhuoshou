@@ -784,6 +784,43 @@
             color: var(--text-secondary);
         }
         
+        /* 创作者头像计数角标 */
+        .author-avatar-wrapper {
+            position: relative;
+            display: inline-flex;
+            flex-shrink: 0;
+        }
+        
+        .author-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            min-width: 14px;
+            height: 14px;
+            font-size: 8px;
+            font-weight: 800;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 10px;
+            padding: 0 3.5px;
+            line-height: 1;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(11, 20, 53, 0.9);
+            z-index: 10;
+        }
+        
+        .author-badge.badge-blue {
+            background: linear-gradient(135deg, var(--neon-blue), #0055ff);
+            box-shadow: 0 0 5px rgba(0, 240, 255, 0.4);
+        }
+        
+        .author-badge.badge-pink {
+            background: linear-gradient(135deg, var(--neon-pink), #ff007f);
+            box-shadow: 0 0 5px rgba(255, 0, 127, 0.4);
+        }
+        
         /* 霓虹发光按钮 */
         .btn-secondary.btn-glow-pink:hover {
             border-color: var(--neon-pink);
@@ -995,12 +1032,14 @@
                     :class="{ active: isShowingFavorites }"
                     @click="selectFavoritesTab"
                 >
-                    <div class="favorite-icon-wrapper">
-                        <i class="fa-solid fa-star" style="color: var(--neon-pink)"></i>
+                    <div class="author-avatar-wrapper">
+                        <div class="favorite-icon-wrapper">
+                            <i class="fa-solid fa-star" style="color: var(--neon-pink)"></i>
+                        </div>
+                        <span class="author-badge badge-pink">{{ favoriteWorks.length }}</span>
                     </div>
                     <div class="author-card-info">
                         <span class="author-card-name" style="color: var(--neon-pink); font-weight:700;">优秀词收集夹</span>
-                        <span class="author-card-count">已收集 {{ favoriteWorks.length }} 部</span>
                     </div>
                 </div>
 
@@ -1012,10 +1051,12 @@
                     :class="{ active: !isShowingFavorites && result && result.sec_uid === author.sec_uid }"
                     @click="selectActiveAuthor(author)"
                 >
-                    <img class="author-card-avatar" :src="author.author_avatar || 'https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/common/images/dreamina-v5.ico'" alt="头像">
+                    <div class="author-avatar-wrapper">
+                        <img class="author-card-avatar" :src="author.author_avatar || 'https://lf3-lv-buz.vlabstatic.com/obj/image-lvweb-buz/common/images/dreamina-v5.ico'" alt="头像">
+                        <span class="author-badge badge-blue">{{ author.works_count }}</span>
+                    </div>
                     <div class="author-card-info">
                         <span class="author-card-name">{{ author.author_name }}</span>
-                        <span class="author-card-count">收录 {{ author.works_count }} 部作品</span>
                     </div>
                 </div>
             </div>
