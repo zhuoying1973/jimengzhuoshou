@@ -1185,10 +1185,10 @@
                         <div v-if="isShowingFavorites" class="favorite-icon-wrapper" style="width:38px; height:38px; font-size:18px; border-radius:50%; background:rgba(255,0,127,0.1); border:1px solid var(--neon-pink); display:flex; justify-content:center; align-items:center;">
                             <i class="fa-solid fa-star" style="color:var(--neon-pink)"></i>
                         </div>
-                        <img v-else class="author-avatar" :src="authorWorks ? (authorWorks.author_avatar || result.avatar) : result.avatar" alt="头像" style="width:38px; height:38px;">
+                        <img v-else class="author-avatar" :src="authorWorks ? (authorWorks.author_avatar || result?.avatar) : result?.avatar" alt="头像" style="width:38px; height:38px;">
                         <div>
                             <div v-if="isShowingFavorites" class="author-name" style="font-size:14px; color:var(--neon-pink);">优秀词收集夹（我的提示词学习库）</div>
-                            <div v-else class="author-name" style="font-size:14px; color:#fff;">{{ authorWorks ? (authorWorks.author_name || result.author) : result.author }} 的公开作品集</div>
+                            <div v-else class="author-name" style="font-size:14px; color:#fff;">{{ authorWorks ? (authorWorks.author_name || result?.author) : result?.author }} 的公开作品集</div>
                             <div class="author-tag" style="font-size:10px;">
                                 <span v-if="isShowingFavorites">共收集了 {{ filteredWorks.length }} 部带提示词的优秀作品（点击卡片展示作品并学习）</span>
                                 <span v-else>共收录 {{ filteredWorks.length }} 部优秀作品（已勾选 {{ selectedWorks.length }} 项）</span>
@@ -1933,6 +1933,23 @@
                     } finally {
                         promptGenerating.value = false;
                     }
+                };
+
+                // 保存系统设置（API Key）
+                const saveSettings = () => {
+                    localStorage.setItem("qwen_api_key", apiKey.value.trim());
+                    showToast("设置保存成功！");
+                };
+
+                // 下载视频逻辑（通过请求本地代理穿透防盗链）
+                const downloadVideo = (url) => {
+                    const proxyUrl = `/api/download?url=${encodeURIComponent(url)}`;
+                    const link = document.createElement('a');
+                    link.href = proxyUrl;
+                    link.download = `jimeng_video_${Date.now()}.mp4`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
                 };
 
                 // 复制文本到剪贴板
