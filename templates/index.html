@@ -1274,11 +1274,12 @@
                 </div>
                 
                 <!-- 过滤 Switches -->
-                <div class="filter-switches">
-                    <label class="switch-container">
-                        <input type="checkbox" v-model="filterHasPrompt">
-                        <span class="switch-label"><i class="fa-solid fa-font" style="color:var(--neon-pink)"></i> 仅看带提示词</span>
-                    </label>
+                <div class="filter-switches" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <select v-model="promptFilter" class="select-glass" style="height: 28px; padding: 0 24px 0 8px; font-size: 11px; border-radius: 6px; width: auto; line-height: 26px; cursor: pointer; outline: none; border-color: rgba(255,255,255,0.08);">
+                        <option value="all">提示词：全部作品</option>
+                        <option value="has">提示词：有原生词</option>
+                        <option value="none">提示词：无原生词</option>
+                    </select>
                     <label class="switch-container">
                         <input type="checkbox" v-model="filterHasEpisodes">
                         <span class="switch-label"><i class="fa-solid fa-film" style="color:var(--neon-blue)"></i> 仅看续集</span>
@@ -1606,7 +1607,7 @@
                 const authorWorks = ref(null);
                 const selectedWorks = ref([]);
                 const sortKey = ref('default'); 
-                const filterHasPrompt = ref(false);
+                const promptFilter = ref('all');
                 const filterHasEpisodes = ref(false);
                 const toast = ref({ show: false, msg: '' });
 
@@ -1914,7 +1915,12 @@
 
                 const filteredWorks = computed(() => {
                     let list = isShowingFavorites.value ? [...favoriteWorks.value] : (authorWorks.value ? [...authorWorks.value.works] : []);
-                    if (filterHasPrompt.value) list = list.filter(w => w.has_prompt || (w.prompt && w.prompt.trim().length > 0));
+                    // 提示词有无筛选
+                    if (promptFilter.value === 'has') {
+                        list = list.filter(w => w.has_prompt || (w.prompt && w.prompt.trim().length > 0));
+                    } else if (promptFilter.value === 'none') {
+                        list = list.filter(w => !(w.has_prompt || (w.prompt && w.prompt.trim().length > 0)));
+                    }
                     if (filterHasEpisodes.value) list = list.filter(w => w.episodes_count > 1);
                     if (sortKey.value === 'like') list.sort((a, b) => b.like_count - a.like_count);
                     else if (sortKey.value === 'usage') list.sort((a, b) => b.usage_count - a.usage_count);
@@ -2069,7 +2075,7 @@
                     authorWorks,
                     selectedWorks,
                     sortKey,
-                    filterHasPrompt,
+                    promptFilter,
                     filterHasEpisodes,
                     toast,
                     toggleSettings,
