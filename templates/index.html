@@ -1205,7 +1205,7 @@
 
             <!-- 视频预览 -->
             <div v-if="result.video_url" class="media-preview">
-                <video :key="result.id" :src="'/api/download?url=' + encodeURIComponent(result.video_url)" controls autoplay muted loop playsinline @vnode-before-unmount="onVideoUnmount"></video>
+                <video :key="result.id" :src="'/api/download?url=' + encodeURIComponent(result.video_url)" controls autoplay muted loop playsinline @vnode-before-unmount="onVideoUnmount" @error="handleVideoError(result)"></video>
             </div>
             <!-- 静态图/封面预览 -->
             <div v-else-if="result.cover_url" class="media-preview">
@@ -2018,6 +2018,45 @@
                     });
                 };
 
+                // 视频直链失效自动在后台重新抓取并更新本地缓存
+                const handleVideoError = async (work) => {
+                    if (!work || !work.id) return;
+                    if (work._hasRetried) {
+                        showToast("视频加载失败：链接已失效，且重新解析尝试未成功。可能作品已被作者设为私密或删除。");
+                        return;
+                    }
+                    work._hasRetried = true;
+                    showToast("检测到视频直链已过期，阿福正在为您自动修复最新链接...");
+                    try {
+                        const response = await fetch('/api/parse', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ url: `https://jimeng.jianying.com/detail?id=${work.id}` })
+                        });
+                        const data = await response.json();
+                        if (data.code === 0 && data.data.video_url) {
+                            result.value.video_url = data.data.video_url;
+                            
+                            // 同步更新当前正在浏览列表里的缓存，避免点击它又去重新解析
+                            if (authorWorks.value && authorWorks.value.works) {
+                                const target = authorWorks.value.works.find(w => w.id === work.id);
+                                if (target) {
+                                    target.video_url = data.data.video_url;
+                                }
+                            }
+                            const favTarget = favoriteWorks.value.find(w => w.id === work.id);
+                            if (favTarget) {
+                                favTarget.video_url = data.data.video_url;
+                            }
+                            showToast("视频直链修复成功！已自动播放并保存新链接。");
+                        } else {
+                            showToast("视频直链更新失败，该作品可能已被作者删除或隐藏。");
+                        }
+                    } catch (e) {
+                        showToast("尝试自动重新抓取时网络连接异常");
+                    }
+                };
+
                 const triggerAiReverse = async () => {
                     if (!apiKey.value.trim()) { showSettings.value = true; return; }
                     reversing.value = true;
@@ -2185,7 +2224,8 @@
                     isShowingFavorites,
                     selectFavoritesTab,
                     toggleFavorite,
-                    isWorkFavorited
+                    isWorkFavorited,
+                    handleVideoError
                 };
             }
         }).mount('#app');
