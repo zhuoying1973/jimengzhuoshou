@@ -262,6 +262,54 @@
             margin-top: 2px;
         }
 
+        /* 电影级微型徽章行 */
+        .result-meta-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+            margin-top: 5px;
+        }
+
+        .meta-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: 4px;
+            user-select: none;
+            letter-spacing: 0.2px;
+        }
+
+        .badge-green {
+            background-color: rgba(0, 255, 127, 0.08);
+            border: 1px solid rgba(0, 255, 127, 0.20);
+            color: #00ff7f;
+            text-shadow: 0 0 8px rgba(0, 255, 127, 0.2);
+        }
+
+        .badge-blue {
+            background-color: rgba(0, 240, 255, 0.08);
+            border: 1px solid rgba(0, 240, 255, 0.20);
+            color: #00f0ff;
+            text-shadow: 0 0 8px rgba(0, 240, 255, 0.2);
+        }
+
+        .badge-pink {
+            background-color: rgba(255, 0, 127, 0.08);
+            border: 1px solid rgba(255, 0, 127, 0.20);
+            color: #ff007f;
+            text-shadow: 0 0 8px rgba(255, 0, 127, 0.2);
+        }
+
+        .badge-gray {
+            background-color: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--text-secondary);
+        }
+
         /* 视频/封面预览区 */
         .media-preview {
             width: 100%;
@@ -1137,7 +1185,16 @@
                     <img class="author-avatar" :src="result.avatar" alt="头像">
                     <div>
                         <div class="author-name">{{ result.author }}</div>
-                        <div class="author-tag">作品 ID: {{ result.id }}</div>
+                        <div class="result-meta-row">
+                            <span class="author-tag" style="margin-top: 0; margin-right: 2px;">作品 ID: {{ result.id }}</span>
+                            <span v-if="result?.is_original" class="meta-badge badge-green">首发</span>
+                            <span v-if="result?.usage_count > 0" class="meta-badge badge-blue">
+                                <i class="fa-solid fa-camera"></i> 跟拍 {{ result.usage_count }}
+                            </span>
+                            <span v-if="result?.like_count > 0" class="meta-badge badge-pink">
+                                <i class="fa-solid fa-heart"></i> 点赞 {{ result.like_count }}
+                            </span>
+                        </div>
                     </div>
                 </div>
                 <!-- 快捷复制视频 -->
@@ -1148,7 +1205,7 @@
 
             <!-- 视频预览 -->
             <div v-if="result.video_url" class="media-preview">
-                <video :key="result.id" :src="'/api/download?url=' + encodeURIComponent(result.video_url)" controls autoplay loop playsinline @vnode-before-unmount="onVideoUnmount"></video>
+                <video :key="result.id" :src="'/api/download?url=' + encodeURIComponent(result.video_url)" controls autoplay muted loop playsinline @vnode-before-unmount="onVideoUnmount"></video>
             </div>
             <!-- 静态图/封面预览 -->
             <div v-else-if="result.cover_url" class="media-preview">
