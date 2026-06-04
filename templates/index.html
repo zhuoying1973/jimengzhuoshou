@@ -1139,7 +1139,18 @@
                 >
             </div>
 
-            <p style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; margin-top:5px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px; padding:10px 0; border-top:1px solid rgba(255,255,255,0.06); border-bottom:1px solid rgba(255,255,255,0.06);">
+                <span style="font-size:12px; font-weight:600; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
+                    <i class="fa-solid fa-paste" style="color:var(--neon-blue)"></i>
+                    剪贴板自动侦测解析
+                </span>
+                <label class="switch-container" style="gap:6px; margin-bottom:0; display:flex; align-items:center;">
+                    <input type="checkbox" v-model="autoClipboardParse" @change="saveClipboardSettings">
+                    <span style="font-size:11px; color:var(--text-secondary)">{{ autoClipboardParse ? '已启用' : '已禁用' }}</span>
+                </label>
+            </div>
+
+            <p style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; margin-top:10px;">
                 注: API 密钥仅保存在您本机的浏览器缓存中，不会被上传。智能提示词反推使用阿里通义千问多模态大模型进行高水准的画面脑补和运镜描述重构。
             </p>
         </div>
@@ -1625,6 +1636,7 @@
                 const reversedPrompt = ref('');
                 const showSettings = ref(false);
                 const apiKey = ref('');
+                const autoClipboardParse = ref(false);
                 const reverseMode = ref('2'); 
                 
                 const inspiration = ref('');
@@ -1849,8 +1861,19 @@
                 onMounted(() => {
                     const storedKey = localStorage.getItem("qwen_api_key");
                     if (storedKey) apiKey.value = storedKey;
+
+                    const storedClipboard = localStorage.getItem("auto_clipboard_parse");
+                    if (storedClipboard !== null) {
+                        autoClipboardParse.value = storedClipboard === 'true';
+                    }
+
                     loadAuthorsList();
                     loadFavoritesList();
+
+                    // 绑定页面激活和焦点重获事件以侦测剪贴板
+                    window.addEventListener('focus', checkClipboardOnFocus);
+                    document.addEventListener('visibilitychange', checkClipboardOnFocus);
+                    document.addEventListener('click', handlePageClick);
                 });
 
                 const toggleSettings = () => { showSettings.value = !showSettings.value; };
@@ -2112,6 +2135,48 @@
                     showToast("设置保存成功！");
                 };
 
+                // 保存剪贴板自动解析设置
+                const saveClipboardSettings = () => {
+                    localStorage.setItem("auto_clipboard_parse", autoClipboardParse.value.toString());
+                    showToast(autoClipboardParse.value ? "剪贴板自动侦测已启用" : "剪贴板自动侦测已停用");
+                };
+
+                // 重获焦点或页面可见时，自动检测剪贴板中的即梦分享链接并解析
+                const checkClipboardOnFocus = async () => {
+                    if (!autoClipboardParse.value || loading.value) return;
+                    try {
+                        if (document.visibilityState !== 'visible') return;
+                        
+                        const text = await navigator.clipboard.readText();
+                        const trimmedText = text.trim();
+                        if (!trimmedText) return;
+                        
+                        const urlMatch = trimmedText.match(/https?:\/\/[^\s]+/);
+                        if (urlMatch) {
+                            const url = urlMatch[0];
+                            if (url.includes("jimeng.jianying.com") || url.includes("jimeng.com")) {
+                                const lastAutoParsed = localStorage.getItem("last_auto_parsed_clip") || "";
+                                if (trimmedText !== lastAutoParsed) {
+                                    // 记录此次已自动解析的内容，防止页面失去/重新获得焦点时无限刷新
+                                    localStorage.setItem("last_auto_parsed_clip", trimmedText);
+                                    shareInput.value = trimmedText;
+                                    showToast("检测到剪贴板中存在新的即梦链接，正在自动为您解析...");
+                                    await handleParse();
+                                }
+                            }
+                        }
+                    } catch (err) {
+                        console.log("读取剪贴板受限或未授权:", err);
+                    }
+                };
+
+                // 点击页面空白处或组件时的兜底侦测，提升部分浏览器下的响应灵敏度
+                const handlePageClick = () => {
+                    if (autoClipboardParse.value && !shareInput.value.trim() && !loading.value) {
+                        checkClipboardOnFocus();
+                    }
+                };
+
                 // 下载视频逻辑（通过请求本地代理穿透防盗链）
                 const downloadVideo = (url) => {
                     const proxyUrl = `/api/download?url=${encodeURIComponent(url)}`;
@@ -2225,7 +2290,9 @@
                     selectFavoritesTab,
                     toggleFavorite,
                     isWorkFavorited,
-                    handleVideoError
+                    handleVideoError,
+                    autoClipboardParse,
+                    saveClipboardSettings
                 };
             }
         }).mount('#app');
