@@ -2137,6 +2137,15 @@
 
                 // 保存剪贴板自动解析设置
                 const saveClipboardSettings = () => {
+                    if (autoClipboardParse.value) {
+                        // 浏览器安全沙箱限制：非安全上下文 (HTTP) 无法使用 navigator.clipboard API
+                        if (!navigator.clipboard || !navigator.clipboard.readText) {
+                            showToast("提示：当前为 HTTP 链接，浏览器出于安全隐私限制，禁用了网页自动读取剪贴板功能。推荐手动粘贴链接，或将服务升级为 HTTPS 访问以开启此功能。");
+                            autoClipboardParse.value = false;
+                            localStorage.setItem("auto_clipboard_parse", "false");
+                            return;
+                        }
+                    }
                     localStorage.setItem("auto_clipboard_parse", autoClipboardParse.value.toString());
                     showToast(autoClipboardParse.value ? "剪贴板自动侦测已启用" : "剪贴板自动侦测已停用");
                 };
@@ -2144,6 +2153,12 @@
                 // 重获焦点或页面可见时，自动检测剪贴板中的即梦分享链接并解析
                 const checkClipboardOnFocus = async () => {
                     if (!autoClipboardParse.value || loading.value) return;
+                    
+                    // 防御性判断接口是否可用
+                    if (!navigator.clipboard || !navigator.clipboard.readText) {
+                        return;
+                    }
+
                     try {
                         if (document.visibilityState !== 'visible') return;
                         
@@ -2167,6 +2182,10 @@
                         }
                     } catch (err) {
                         console.log("读取剪贴板受限或未授权:", err);
+                        // 如果抛出了 NotAllowedError (用户拒绝了剪贴板读取授权)，予以友情提示
+                        if (err.name === 'NotAllowedError') {
+                            showToast("自动解析失败：您拒绝了网页读取剪贴板的授权，请在浏览器权限设置中开启。");
+                        }
                     }
                 };
 
