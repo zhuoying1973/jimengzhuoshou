@@ -2061,6 +2061,8 @@
 
                 // 视频直链失效自动在后台重新抓取并更新本地缓存
                 const handleVideoError = async (work) => {
+                    if (loading.value) return;
+                    if (result.value && work && work.id !== result.value.id) return;
                     if (!work || !work.id) return;
                     if (work._hasRetried) {
                         showToast("视频加载失败：链接已失效，且重新解析尝试未成功。可能作品已被作者设为私密或删除。");
