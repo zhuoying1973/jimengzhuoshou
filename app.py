@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import urllib.request
 import urllib.parse
+import urllib.error
 import json
 import re
 import ssl
@@ -1081,7 +1082,7 @@ def reverse_prompt():
     if use_multi_images:
         print(f"[Reverse] Multi-image reverse mode, keyframes: {len(keyframes)}")
         for kf in keyframes:
-            content_list.append({"image": kf["image_base64"]})
+            content_list.append({"type": "image_url", "image_url": {"url": kf["image_base64"]}})
             
         keyframes_guide = "You are provided with a sequence of keyframes in chronological order:\n"
         for idx, kf in enumerate(keyframes):
@@ -1136,7 +1137,7 @@ def reverse_prompt():
             
             )
             
-        content_list.append({"text": prompt_text})
+        content_list.append({"type": "text", "text": prompt_text})
         
     else:
         print("Entering single image fallback branch.")
@@ -1162,7 +1163,7 @@ def reverse_prompt():
                 print(f"Warning: image base64 conversion failed: {e}")
                 image_input = image_url
                 
-        content_list.append({"image": image_input})
+        content_list.append({"type": "image_url", "image_url": {"url": image_input}})
         
         prompt_header = ""
         if video_prompt:
@@ -1205,7 +1206,7 @@ def reverse_prompt():
             
             )
             
-        content_list.append({"text": prompt_text})
+        content_list.append({"type": "text", "text": prompt_text})
         
     qwen_api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
     payload = {
@@ -1249,7 +1250,17 @@ def reverse_prompt():
                 "reversed_prompt": reversed_text
             }
         })
+    except urllib.error.HTTPError as e:
+        err_msg = str(e)
+        try:
+            err_body = e.read().decode('utf-8', errors='ignore')
+            print(f"[Reverse] Alibaba API HTTPError {e.code}: {err_body}")
+            err_msg = f"HTTP Error {e.code}: {err_body}"
+        except Exception:
+            pass
+        return jsonify({"code": -1, "msg": f"Failed requesting Alibaba model: {err_msg}"}), 500
     except Exception as e:
+        print(f"[Reverse] General Exception: {e}")
         return jsonify({"code": -1, "msg": f"Failed requesting Alibaba model: {str(e)}"}), 500
 
 # 5. 核心接口：代理中转下载接口（穿透字节 CDN 403 拦截）
