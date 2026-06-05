@@ -1258,7 +1258,7 @@
                     :disabled="reversing"
                     @click="triggerAiReverse"
                 >
-                    <span v-if="reversing"><i class="fa-solid fa-spinner fa-spin"></i> AI 反推中...</span>
+                    <span v-if="reversing"><i class="fa-solid fa-spinner fa-spin"></i> {{ reversingText }}</span>
                     <span v-else><i class="fa-solid fa-robot" style="color: var(--neon-pink)"></i> AI 智能反推提示词</span>
                 </button>
             </div>
@@ -1632,6 +1632,7 @@
                 const shareInput = ref('');
                 const loading = ref(false);
                 const reversing = ref(false);
+                const reversingText = ref('AI 反推中...');
                 const result = ref(null);
                 const reversedPrompt = ref('');
                 const showSettings = ref(false);
@@ -2080,15 +2081,50 @@
                     }
                 };
 
+                let reverseTimer1 = null;
+                let reverseTimer2 = null;
+
                 const triggerAiReverse = async () => {
                     if (!apiKey.value.trim()) { showSettings.value = true; return; }
                     reversing.value = true;
+                    
+                    if (reverseTimer1) clearTimeout(reverseTimer1);
+                    if (reverseTimer2) clearTimeout(reverseTimer2);
+                    
+                    if (result.value && result.value.video_url) {
+                        reversingText.value = '正在下载视频并抽帧...';
+                        reverseTimer1 = setTimeout(() => {
+                            if (reversing.value) reversingText.value = '定位剪辑点前后双帧...';
+                        }, 2500);
+                        reverseTimer2 = setTimeout(() => {
+                            if (reversing.value) reversingText.value = '大模型分析重构剧本...';
+                        }, 5500);
+                    } else {
+                        reversingText.value = 'AI 封面单图反推中...';
+                    }
+                    
                     try {
-                        const res = await fetch('/api/reverse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image_url: result.value.cover_url, api_key: apiKey.value.trim(), mode: reverseMode.value }) });
+                        const res = await fetch('/api/reverse', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                image_url: result.value ? result.value.cover_url : "",
+                                api_key: apiKey.value.trim(),
+                                mode: reverseMode.value,
+                                video_prompt: (result.value ? result.value.prompt : "") || "",
+                                video_url: (result.value ? result.value.video_url : "") || ""
+                            })
+                        });
                         const data = await res.json();
                         if (data.code === 0) reversedPrompt.value = data.data.reversed_prompt;
                         else showToast(data.msg);
-                    } finally { reversing.value = false; }
+                    } catch (e) {
+                        showToast("AI 反推服务网络异常");
+                    } finally { 
+                        reversing.value = false; 
+                        if (reverseTimer1) clearTimeout(reverseTimer1);
+                        if (reverseTimer2) clearTimeout(reverseTimer2);
+                    }
                 };
 
                 const generatePrompt = async () => {
@@ -2246,6 +2282,7 @@
                     shareInput,
                     loading,
                     reversing,
+                    reversingText,
                     result,
                     reversedPrompt,
                     showSettings,

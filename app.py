@@ -552,6 +552,186 @@ def generate_prompt():
         return jsonify({"code": -1, "msg": f"AI 创意生成失败: {str(e)}，请确认您的 API Key 输入无误，或者网络连接正常。"}), 500
 
 
+# ================= 视频镜头检测自适应抽帧算法 (双锚点法) =================
+def extract_video_keyframes(video_url, max_frames=8):
+    """
+    通过 OpenCV 检测视频的剪辑点/镜头切换点，并使用双锚点提取前后帧。
+    返回: [{"time_offset": float, "image_base64": str, "description": str}, ...]
+    """
+    import base64
+    import time
+    
+    # 动态导入 cv2，若未安装或不可用则在调用时抛出异常，由外层进行优雅降级
+    import cv2
+    
+    # 1. 代理中转下载视频，伪装请求头以绕过即梦/字节跳动 CDN 403 防盗链限制
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://jimeng.jianying.com/',
+        'Origin': 'https://jimeng.jianying.com'
+    }
+    
+    cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scratch")
+    os.makedirs(cache_dir, exist_ok=True)
+    temp_video_path = os.path.join(cache_dir, f"temp_detect_{int(time.time() * 1000)}.mp4")
+    
+    try:
+        print(f"[抽帧助手] 后端代理下载视频中: {video_url[:80]}...")
+        req = urllib.request.Request(video_url, headers=headers)
+        # 绕过系统 SSL 限制进行直链下载
+        with urllib.request.urlopen(req, context=ctx, timeout=20) as resp:
+            with open(temp_video_path, "wb") as f:
+                f.write(resp.read())
+        print(f"[抽帧助手] 视频临时下载完成，大小: {os.path.getsize(temp_video_path)} 字节")
+    except Exception as e:
+        print(f"[抽帧助手] 下载临时视频文件失败: {e}")
+        if os.path.exists(temp_video_path):
+            try: os.remove(temp_video_path)
+            except Exception: pass
+        return []
+
+    cap = None
+    keyframes = []
+    try:
+        cap = cv2.VideoCapture(temp_video_path)
+        if not cap.isOpened():
+            print("[抽帧助手] OpenCV 无法打开视频流")
+            return []
+            
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if fps <= 0 or total_frames <= 0:
+            print("[抽帧助手] 视频元数据获取失败")
+            return []
+            
+        duration = total_frames / fps
+        print(f"[抽帧助手] 视频属性：帧率={fps:.2f}, 总帧数={total_frames}, 时长={duration:.2f}秒")
+        
+        # 2. 帧差异直方图扫描（降采样以提高计算性能，每2帧分析一次）
+        histograms = []
+        sampled_indices = []
+        step = 2
+        
+        for idx in range(0, total_frames, step):
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+            ret, frame = cap.read()
+            if not ret:
+                break
+            # 转为 HSV 空间，计算 H-S 联合直方图以排除亮度和阴影干扰
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            hist = cv2.calcHist([hsv], [0, 1], None, [30, 32], [0, 180, 0, 256])
+            cv2.normalize(hist, hist)
+            histograms.append(hist)
+            sampled_indices.append(idx)
+            
+        # 3. 计算相邻被采样帧之间的直方图相关性
+        correlations = []
+        for i in range(len(histograms) - 1):
+            score = cv2.compareHist(histograms[i], histograms[i+1], cv2.HISTCMP_CORREL)
+            correlations.append((sampled_indices[i], sampled_indices[i+1], score))
+            
+        # 4. 识别镜头突变剪辑点 (相关性得分低于 0.65 判定为切换点)
+        cut_candidates = []
+        for start_idx, end_idx, score in correlations:
+            if score < 0.65:
+                cut_candidates.append((start_idx, end_idx, score))
+        print(f"[抽帧助手] 检测到 {len(cut_candidates)} 个剪辑切换转场点。")
+        
+        # 5. 双锚点帧索引确定：首帧 + 尾帧 + 每一个剪辑点的 N-1 和 N 帧
+        frames_to_extract = set()
+        frames_to_extract.add(0)
+        frames_to_extract.add(total_frames - 1)
+        for start_idx, end_idx, score in cut_candidates:
+            frames_to_extract.add(start_idx)
+            frames_to_extract.add(end_idx)
+            
+        sorted_extract_indices = sorted(list(frames_to_extract))
+        
+        # 6. 最大帧数熔断机制（超标时按显著度 score 筛选，始终保留首尾帧）
+        if len(sorted_extract_indices) > max_frames:
+            print(f"[抽帧助手] 待提取帧数 ({len(sorted_extract_indices)}) 超过上限 ({max_frames})，进行显著度裁剪...")
+            essential_indices = {0, total_frames - 1}
+            # 按直方图相关性得分从低到高（差异从大到小）排序
+            cut_candidates.sort(key=lambda x: x[2])
+            for start_idx, end_idx, score in cut_candidates:
+                if len(essential_indices) + 2 <= max_frames:
+                    essential_indices.add(start_idx)
+                    essential_indices.add(end_idx)
+                else:
+                    break
+            sorted_extract_indices = sorted(list(essential_indices))
+            
+        print(f"[抽帧助手] 最终确定抓取的关键帧集合: {sorted_extract_indices}")
+        
+        # 7. 提取帧图并进行 Base64 编码与尺寸等比例下采样
+        for frame_idx in sorted_extract_indices:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+            ret, frame = cap.read()
+            if not ret:
+                continue
+                
+            time_offset = frame_idx / fps
+            
+            # 等比例缩放至最大边 800px 以节省大模型 Payload 带宽与 Token
+            h, w = frame.shape[:2]
+            max_size = 800
+            if max(h, w) > max_size:
+                scale = max_size / max(h, w)
+                frame_resized = cv2.resize(frame, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+            else:
+                frame_resized = frame
+                
+            # 压缩编码为 JPEG
+            success, encoded_img = cv2.imencode('.jpg', frame_resized, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+            if not success:
+                continue
+                
+            img_b64 = base64.b64encode(encoded_img).decode('utf-8')
+            
+            # 命名帧的语义，辅助大模型理解时序
+            if frame_idx == 0:
+                desc = "视频开始（第 0 秒）起点画面"
+            elif frame_idx == total_frames - 1:
+                desc = f"视频结束（第 {time_offset:.1f} 秒）尾声定格画面"
+            else:
+                is_before = False
+                is_after = False
+                for s_idx, e_idx, _ in cut_candidates:
+                    if frame_idx == s_idx:
+                        is_before = True
+                        break
+                    if frame_idx == e_idx:
+                        is_after = True
+                        break
+                if is_before:
+                    desc = f"镜头切换前最后一帧（第 {time_offset:.1f} 秒，上一个分镜的结束画面）"
+                elif is_after:
+                    desc = f"镜头切换后第一帧（第 {time_offset:.1f} 秒，下一个新分镜的开始画面）"
+                else:
+                    desc = f"第 {time_offset:.1f} 秒关键帧画面"
+                    
+            keyframes.append({
+                "time_offset": time_offset,
+                "image_base64": f"data:image/jpeg;base64,{img_b64}",
+                "description": desc
+            })
+            
+    except Exception as e:
+        print(f"[抽帧助手] 自适应镜头抽帧运行失败: {e}")
+    finally:
+        if cap is not None:
+            try: cap.release()
+            except Exception: pass
+        if os.path.exists(temp_video_path):
+            try:
+                os.remove(temp_video_path)
+                print("[抽帧助手] 临时视频已安全物理删除。")
+            except Exception as e:
+                print(f"[抽帧助手] 临时视频删除失败: {e}")
+                
+    return keyframes
+
+
 # 4. 核心接口：通义千问大模型智能反推提示词
 @app.route('/api/reverse', methods=['POST'])
 def reverse_prompt():
@@ -562,81 +742,156 @@ def reverse_prompt():
     image_base64 = data.get("image_base64", "").strip()
     api_key = data.get("api_key", "").strip()
     mode = data.get("mode", "2").strip()
+    video_prompt = data.get("video_prompt", "").strip()
+    video_url = data.get("video_url", "").strip()
     
-    if not image_url and not image_base64:
-        return jsonify({"code": -1, "msg": "缺少图片链接或本地图片数据"}), 400
+    if not image_url and not image_base64 and not video_url:
+        return jsonify({"code": -1, "msg": "缺少图片链接、本地图片数据或视频链接"}), 400
     if not api_key:
         return jsonify({"code": -1, "msg": "请先配置大模型 API Key（可在设置中填写）"}), 400
         
-    print(f"收到 AI 视频反推请求，方案模式: {mode}，是否有本地Base64: {bool(image_base64)}")
+    print(f"收到 AI 视频反推请求，方案模式: {mode}，原版提示词长: {len(video_prompt)}，视频链接: {bool(video_url)}")
     
-    # 优先使用前端直传的 Base64，否则后端下载网络图片并转成 Base64
-    if image_base64:
-        image_input = image_base64
-        print("使用前端直接上传的本地图片数据流。")
-    else:
-        image_input = image_url
+    # 1. 尝试自适应视频抽帧（双锚点镜头检测算法）
+    keyframes = []
+    if video_url:
         try:
-            img_headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Referer': 'https://jimeng.jianying.com/'
-            }
-            print("后端正在代理下载图片并转换为 Base64 数据流...")
-            img_req = urllib.request.Request(image_url, headers=img_headers)
-            with urllib.request.urlopen(img_req, context=ctx, timeout=15) as img_resp:
-                img_data = img_resp.read()
-                content_type = img_resp.headers.get('Content-Type', 'image/jpeg')
-            base64_data = base64.b64encode(img_data).decode('utf-8')
-            image_input = f"data:{content_type};base64,{base64_data}"
-            print("图片 Base64 转换成功！")
+            keyframes = extract_video_keyframes(video_url, max_frames=8)
         except Exception as e:
-            print(f"警告: 后端图片转 Base64 失败，回退到使用原 URL 请求大模型: {e}")
-            image_input = image_url
+            print(f"警告: OpenCV 视频自适应抽帧失败，将自动降级为封面图模式: {e}")
+            
+    # 2. 区分【多图分镜联合反推】与【单图封面反推】
+    use_multi_images = len(keyframes) > 0
+    content_list = []
+    
+    if use_multi_images:
+        print(f"成功进入 [多图分镜联合反推] 模式，共提取了 {len(keyframes)} 个关键帧。")
+        # 组装多张 Base64 关键帧图片到消息 content 中
+        for kf in keyframes:
+            content_list.append({"image": kf["image_base64"]})
+            
+        # 构建大模型关键帧时序指南，精确辅助大模型掌握剪辑过渡
+        keyframes_guide = "你被提供了一组按时间顺序排列的该视频关键帧画面，请仔细核对并以此来重构分镜剧本动作：\n"
+        for idx, kf in enumerate(keyframes):
+            keyframes_guide += f"- 画面 {idx + 1}：{kf['description']}\n"
+        keyframes_guide += "\n"
         
-    # 调用阿里通义千问多模态模型 (Qwen-VL-Max) 进行反推
-    qwen_api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
-    
-    if mode == "1":
-        prompt_text = (
-            "你看到的这张图片是一段由 AI 生成的动态视频的核心封面或第一帧。\n"
-            "请作为一名顶级的 AI 视频生成提示词导演专家，以此静态画面为基础，脑补并重构出用于生成该动态视频的专业级 12秒 时序分镜剧本方案。\n\n"
-            "你必须严格按照以下格式直接输出，不要有任何多余的开头介绍、前言分析或结尾寄语，严禁在任何地方使用 Emoji 图形符号。输出格式如下：\n\n"
-            "[时长] 12秒\n"
-            "[画质风格] [根据图片反推其画质、风格倾向、物理材质与细节表现]\n"
-            "[音乐背景] [根据画面意境，脑补最贴合的背景音乐及音效风格]\n\n"
-            "---\n\n"
-            "时间 | 画面内容 | 运镜/剪辑 | 音乐节点\n"
-            "0-3秒 | [描述开场时承接本图的画面主体细节与动作演变，包含英文术语如 close-up] | [描述本阶段运镜，如 slow panning, zoom in] | [标明音效/音乐切入点]\n"
-            "3-6秒 | [脑补描述接下来的动作延伸、主体位置变化或光影色调过渡] | [描述镜头轨迹，如 slow tracking, tilt up] | [标明声音/人声或背景乐的变化]\n"
-            "6-9秒 | [脑补描述动作的蓄力、物理光影的冲突或材质的高精细度呈现] | [描述运镜方式，如 quick pan, orbital shot] | [描述声音的高潮或器乐卡点]\n"
-            "9-12秒 | [脑补描述最终的爆发、物理碰撞、卡点或定格，如碎片激荡、光芒绽放] | [描述定格或收尾运镜，如 freeze frame, fade out] | [音效在此处强力卡点，与画面同步定格]\n\n"
-            "结尾意境：[一句话概括全片极具诗意或画卷感的收尾意境]\n"
-            "整体节奏：[用 -> 连结的情绪节奏链，如：炸裂开场 -> 疾速勾勒 -> 情感渐浓 -> 悠长收尾]\n\n"
-            "【硬性约束】：\n"
-            "1. 严格禁止在输出内容中带有任何 Emoji 字符。\n"
-            "2. 输出总字数必须严格控制在 600 字以内，字字珠玑，去粗取精。"
-        )
+        prompt_header = ""
+        if video_prompt:
+            prompt_header = f"该视频作品的原版描述大纲提示词为：【{video_prompt}】。你必须以此描述中包含的主题和剧情为核心，不得偏离。\n\n"
+            
+        if mode == "1":
+            prompt_text = (
+                f"{prompt_header}"
+                f"{keyframes_guide}"
+                "请作为一名顶级的 AI 视频生成提示词导演专家，以上面这组按时序排列的静态关键帧为视觉参考，分析每个分镜里动作的变化与镜头转场逻辑（特别注意剪辑点‘变前最后一帧’与‘变后第一帧’的交界处），并严格结合视频的原版描述大纲作为剧情核心骨架，反向重构并脑补出用于直接在即梦里重新生成该动态视频的专业级 12秒 时序分镜剧本方案。\n\n"
+                "你必须严格按照以下格式直接输出，不要有任何多余的开头介绍、前言分析或结尾寄语，严禁在任何地方使用 Emoji 图形符号。输出格式如下：\n\n"
+                "[时长] 12秒\n"
+                "[画质风格] [根据图片反推其整体画质、风格倾向、物理材质与细节表现]\n"
+                "[音乐背景] [根据画面意境，脑补最贴合的背景音乐及音效风格]\n\n"
+                "---\n\n"
+                "时间 | 画面内容 | 运镜/剪辑 | 音乐节点\n"
+                "0-3秒 | [描述开场分镜画面主体细节与动作，结合第0秒的画面，包含英文术语如 close-up] | [描述镜头运动方式，如 slow panning, zoom in] | [标明音效/音乐切入点]\n"
+                "3-6秒 | [结合后续的时间点画面，描述接下来的动作延伸、分镜切换或光影过渡，并在切换处清晰说明如何转场] | [描述镜头轨迹，如 slow tracking, tilt up] | [标明声音/人声或背景乐的变化]\n"
+                "6-9秒 | [结合后续的时间点画面，描述动作变化、分镜切换，体现物理光影的冲突或材质的高精细度呈现] | [描述运镜方式，如 quick pan, orbital shot] | [描述声音的高潮或器乐卡点]\n"
+                "9-12秒 | [结合最后定格的尾声画面，描述最后的动作爆发、分镜结尾或定格，如碎片激荡、光芒定格] | [描述定格或收尾运镜，如 freeze frame, fade out] | [音效在此处强力卡点，与画面同步定格]\n\n"
+                "结尾意境：[一句话概括全片极具诗意或画卷感的收尾意境]\n"
+                "整体节奏：[用 -> 连结的情绪节奏链，如：炸裂开场 -> 镜头切换 -> 情感渐浓 -> 悠长收尾]\n\n"
+                "【硬性约束】：\n"
+                "1. 严格禁止在输出内容中带有任何 Emoji 字符。\n"
+                "2. 输出总字数必须严格控制在 600 字以内，字字珠玑，去粗取精。"
+            )
+        else:
+            prompt_text = (
+                f"{prompt_header}"
+                f"{keyframes_guide}"
+                "请作为一名顶级的 AI 视频生成提示词导演专家，以上面这组按时序排列的静态关键帧为视觉参考，分析每个分镜里动作的变化与镜头转场逻辑，并严格结合视频的原版描述大纲作为核心剧情，反向重构并脑补出用于直接在即梦里生成视频的专业提示词。\n\n"
+                "【输出格式与硬性约束】：\n"
+                "1. 必须将画面主体、动作演变、分镜切换、衣服材质、镜头运镜、光影照明、色调氛围以及最契合该画面的声音配乐氛围，完全融合成一整段连贯、画面感极强的中文叙事长句。不得使用数字序号，不得带有任何分类标签前缀，不得使用 Markdown 列表或任何分段，必须是仅有一段的纯文本叙事。\n"
+                "2. 中文长句中要非常自然地夹带英文专业术语或指令（如 close-up, cinematic lighting, volumetric light, slow panning, sub-bass pulse 等）。\n"
+                "3. 整体提示词必须要融入对分镜切换时序（如 0秒、3秒、6秒、9秒等镜头如何切换和过渡）的动作连贯性描述。\n"
+                "4. 严格禁止在输出文本中出现任何 Emoji 图标符号。\n"
+                "5. 整体总字数必须严格控制在 600 字以内，文字需展现出电影美感与高度视觉张力，短小精悍，无任何闲聊或前后缀说明，直接输出这一整段提示词内容。"
+            )
+            
+        content_list.append({"text": prompt_text})
+        
     else:
-        prompt_text = (
-            "你看到的这张图片是一段由 AI 生成的动态视频的核心封面或第一帧。\n"
-            "请作为一名顶级的 AI 视频生成提示词导演专家，以此静态画面为基础，脑补并重构出用于直接生成视频的专业提示词。\n\n"
-            "【输出格式与硬性约束】：\n"
-            "1. 必须将画面主体、动作演变、衣服材质、镜头运镜、光影照明、色调氛围以及最契合该画面的声音配乐氛围，完全融合成一整段连贯、画面感极强的中文叙述文字。不得使用数字序号，不得带有任何分类标签前缀（如‘画面：’、‘运镜：’等），不得使用 Markdown 列表或任何分段，必须是仅有一段的纯文本叙事。\n"
-            "2. 中文长句中要非常自然地夹带英文专业术语或指令（如 close-up, cinematic lighting, volumetric light, slow panning, sub-bass pulse 等）。\n"
-            "3. 严格禁止在输出文本中出现任何 Emoji 图标符号。\n"
-            "4. 整体总字数必须严格控制在 600 字以内，文字需展现出电影美感与高度视觉张力，短小精悍，无任何闲聊或前后缀说明，直接输出这一整段提示词内容。"
-        )
-    
+        # 降级或单图反推分支
+        print("进入 [单图封面反推] 降级分支。")
+        # 优先使用前端直传的 Base64，否则后端下载网络图片并转成 Base64
+        if image_base64:
+            image_input = image_base64
+            print("使用前端直接上传的本地图片数据流。")
+        else:
+            image_input = image_url
+            try:
+                img_headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Referer': 'https://jimeng.jianying.com/'
+                }
+                print("后端正在代理下载图片并转换为 Base64 数据流...")
+                img_req = urllib.request.Request(image_url, headers=img_headers)
+                with urllib.request.urlopen(img_req, context=ctx, timeout=15) as img_resp:
+                    img_data = img_resp.read()
+                    content_type = img_resp.headers.get('Content-Type', 'image/jpeg')
+                base64_data = base64.b64encode(img_data).decode('utf-8')
+                image_input = f"data:{content_type};base64,{base64_data}"
+                print("图片 Base64 转换成功！")
+            except Exception as e:
+                print(f"警告: 后端图片转 Base64 失败，回退到使用原 URL 请求大模型: {e}")
+                image_input = image_url
+                
+        content_list.append({"image": image_input})
+        
+        prompt_header = ""
+        if video_prompt:
+            prompt_header = f"该视频作品的原版中文描述提示词为：【{video_prompt}】。你必须严格以此描述中包含的剧情故事为核心，不得偏离。\n\n"
+            
+        if mode == "1":
+            prompt_text = (
+                "你看到的这张图片是一段由 AI 生成的动态视频的核心封面或第一帧。\n"
+                f"{prompt_header}"
+                "请作为一名顶级的 AI 视频生成提示词导演专家，以此静态画面为视觉参考，并严格结合该视频的原版描述提示词作为剧情核心骨架，反向重构并脑补扩展出用于生成该动态视频的专业级 12秒 时序分镜剧本方案。\n\n"
+                "你必须严格按照以下格式直接输出，不要有任何多余的开头介绍、前言分析或结尾寄语，严禁在任何地方使用 Emoji 图形符号。输出格式如下：\n\n"
+                "[时长] 12秒\n"
+                "[画质风格] [根据图片反推其画质、风格倾向、物理材质与细节表现]\n"
+                "[音乐背景] [根据画面意境，脑补最贴合的背景音乐及音效风格]\n\n"
+                "---\n\n"
+                "时间 | 画面内容 | 运镜/剪辑 | 音乐节点\n"
+                "0-3秒 | [描述开场时承接本图的画面主体细节与动作演变，包含英文术语如 close-up] | [描述本阶段运镜，如 slow panning, zoom in] | [标明音效/音乐切入点]\n"
+                "3-6秒 | [脑补描述接下来的动作延伸、主体位置变化或光影色调过渡] | [描述镜头轨迹，如 slow tracking, tilt up] | [标明声音/人声或背景乐的变化]\n"
+                "6-9秒 | [脑补描述动作的蓄力、物理光影的冲突或材质的高精细度呈现] | [描述运镜方式，如 quick pan, orbital shot] | [描述声音的高潮或器乐卡点]\n"
+                "9-12秒 | [脑补描述最终的爆发、物理碰撞、卡点或定格，如碎片激荡、光芒绽放] | [描述定格或收尾运镜，如 freeze frame, fade out] | [音效在此处强力卡点，与画面同步定格]\n\n"
+                "结尾意境：[一句话概括全片极具诗意或画卷感的收尾意境]\n"
+                "整体节奏：[用 -> 连结的情绪节奏链，如：炸裂开场 -> 疾速勾勒 -> 情感渐浓 -> 悠长收尾]\n\n"
+                "【硬性约束】：\n"
+                "1. 严格禁止在输出内容中带有任何 Emoji 字符。\n"
+                "2. 输出总字数必须严格控制在 600 字以内，字字珠玑，去粗取精。"
+            )
+        else:
+            prompt_text = (
+                "你看到的这张图片是一段由 AI 生成的动态视频的核心封面或第一帧。\n"
+                f"{prompt_header}"
+                "请作为一名顶级的 AI 视频生成提示词导演专家，以此静态画面为视觉参考，并严格结合该视频的原版描述提示词作为剧情核心，反向重构并脑补出用于直接生成视频的专业提示词。\n\n"
+                "【输出格式与硬性约束】：\n"
+                "1. 必须将画面主体、动作演变、衣服材质、镜头运镜、光影照明、色调氛围以及最契合该画面的声音配乐氛围，完全融合成一整段连贯、画面感极强的中文叙述文字。不得使用数字序号，不得带有任何分类标签前缀（如‘画面：’、‘运镜：’等），不得使用 Markdown 列表或任何分段，必须是仅有一段的纯文本叙事。\n"
+                "2. 中文长句中要非常自然地夹带英文专业术语或指令（如 close-up, cinematic lighting, volumetric light, slow panning, sub-bass pulse 等）。\n"
+                "3. 严格禁止在输出文本中出现任何 Emoji 图标符号。\n"
+                "4. 整体总字数必须严格控制在 600 字以内，文字需展现出电影美感与高度视觉张力，短小精悍，无 any 闲聊或前后缀说明，直接输出这一整段提示词内容。"
+            )
+            
+        content_list.append({"text": prompt_text})
+        
+    # 3. 构造 Qwen-VL-Max 的多模态 Payload 请求
+    qwen_api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
     payload = {
         "model": "qwen-vl-max",
         "input": {
             "messages": [
                 {
                     "role": "user",
-                    "content": [
-                        {"image": image_input},
-                        {"text": prompt_text}
-                    ]
+                    "content": content_list
                 }
             ]
         },
