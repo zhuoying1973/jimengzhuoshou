@@ -1150,6 +1150,17 @@
                 </label>
             </div>
 
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px; padding:10px 0; border-top:1px solid rgba(255,255,255,0.06); border-bottom:1px solid rgba(255,255,255,0.06);">
+                <span style="font-size:12px; font-weight:600; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
+                    <i class="fa-solid fa-music" style="color:var(--neon-pink)"></i>
+                    AI 声音反推模式
+                </span>
+                <select v-model="reverseAudioMode" class="select-glass" style="height: 28px; padding: 0 28px 0 8px; font-size: 11px; border-radius: 6px; width: auto; line-height: 26px; cursor: pointer; outline: none; border-color: rgba(255,255,255,0.08);" @change="saveAudioModeSettings">
+                    <option value="visual">视觉脑补 (速度快)</option>
+                    <option value="listen">真实听音识别 (更精准)</option>
+                </select>
+            </div>
+
             <p style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; margin-top:10px;">
                 注: API 密钥仅保存在您本机的浏览器缓存中，不会被上传。智能提示词反推使用阿里通义千问多模态大模型进行高水准的画面脑补和运镜描述重构。
             </p>
@@ -1638,7 +1649,8 @@
                 const showSettings = ref(false);
                 const apiKey = ref('');
                 const autoClipboardParse = ref(false);
-                const reverseMode = ref('2'); 
+                const reverseMode = ref('2');
+                const reverseAudioMode = ref('visual'); 
                 
                 const inspiration = ref('');
                 const promptStyle = ref('90年代港风武侠');
@@ -1868,6 +1880,11 @@
                         autoClipboardParse.value = storedClipboard === 'true';
                     }
 
+                    const storedAudioMode = localStorage.getItem("reverse_audio_mode");
+                    if (storedAudioMode) {
+                        reverseAudioMode.value = storedAudioMode;
+                    }
+
                     loadAuthorsList();
                     loadFavoritesList();
 
@@ -2090,15 +2107,29 @@
                     
                     if (reverseTimer1) clearTimeout(reverseTimer1);
                     if (reverseTimer2) clearTimeout(reverseTimer2);
+                    if (window.reverseTimer3) clearTimeout(window.reverseTimer3);
                     
                     if (result.value && result.value.video_url) {
-                        reversingText.value = '正在下载视频并抽帧...';
-                        reverseTimer1 = setTimeout(() => {
-                            if (reversing.value) reversingText.value = '定位剪辑点前后双帧...';
-                        }, 2500);
-                        reverseTimer2 = setTimeout(() => {
-                            if (reversing.value) reversingText.value = '大模型分析重构剧本...';
-                        }, 5500);
+                        if (reverseAudioMode.value === 'listen') {
+                            reversingText.value = "正在下载视频轨道⸮⸮⸮";
+                            reverseTimer1 = setTimeout(() => {
+                                if (reversing.value) reversingText.value = "正在提取视频音频流⸮⸮⸮";
+                            }, 2000);
+                            reverseTimer2 = setTimeout(() => {
+                                if (reversing.value) reversingText.value = "听音大模型分析配乐中⸮⸮⸮";
+                            }, 4500);
+                            window.reverseTimer3 = setTimeout(() => {
+                                if (reversing.value) reversingText.value = "视觉大模型分析画面中⸮⸮⸮";
+                            }, 7500);
+                        } else {
+                            reversingText.value = '正在下载视频并抽帧...';
+                            reverseTimer1 = setTimeout(() => {
+                                if (reversing.value) reversingText.value = '定位剪辑点前后双帧...';
+                            }, 2500);
+                            reverseTimer2 = setTimeout(() => {
+                                if (reversing.value) reversingText.value = '大模型分析重构剧本...';
+                            }, 5500);
+                        }
                     } else {
                         reversingText.value = 'AI 封面单图反推中...';
                     }
@@ -2112,7 +2143,8 @@
                                 api_key: apiKey.value.trim(),
                                 mode: reverseMode.value,
                                 video_prompt: (result.value ? result.value.prompt : "") || "",
-                                video_url: (result.value ? result.value.video_url : "") || ""
+                                video_url: (result.value ? result.value.video_url : "") || "",
+                                audio_mode: reverseAudioMode.value
                             })
                         });
                         const data = await res.json();
@@ -2124,6 +2156,7 @@
                         reversing.value = false; 
                         if (reverseTimer1) clearTimeout(reverseTimer1);
                         if (reverseTimer2) clearTimeout(reverseTimer2);
+                        if (window.reverseTimer3) clearTimeout(window.reverseTimer3);
                     }
                 };
 
@@ -2169,6 +2202,12 @@
                 const saveSettings = () => {
                     localStorage.setItem("qwen_api_key", apiKey.value.trim());
                     showToast("设置保存成功！");
+                };
+
+                // 保存声音反向倒推模式设置
+                const saveAudioModeSettings = () => {
+                    localStorage.setItem("reverse_audio_mode", reverseAudioMode.value);
+                    showToast("声音反推模式巰切换为：" + (reverseAudioMode.value === 'listen' ? "真实听音识别" : "视觉脑补"));
                 };
 
                 // 保存剪贴板自动解析设置
@@ -2348,7 +2387,9 @@
                     isWorkFavorited,
                     handleVideoError,
                     autoClipboardParse,
-                    saveClipboardSettings
+                    saveClipboardSettings,
+                    reverseAudioMode,
+                    saveAudioModeSettings
                 };
             }
         }).mount('#app');

@@ -722,17 +722,122 @@ def extract_video_keyframes(video_url, max_frames=8):
         if cap is not None:
             try: cap.release()
             except Exception: pass
-        if os.path.exists(temp_video_path):
-            try:
-                os.remove(temp_video_path)
-                print("[抽帧助手] 临时视频已安全物理删除。")
-            except Exception as e:
-                print(f"[抽帧助手] 临时视频删除失败: {e}")
+        # Released temp video deletion responsibility to main reverse_prompt loop.
                 
     return keyframes
 
 
-# 4. 核心接口：通义千问大模型智能反推提示词
+def extract_video_audio_local(temp_video_path):
+    import subprocess
+    import time
+    
+    if not temp_video_path or not os.path.exists(temp_video_path):
+        print("[AudioExtract] Temp video file not found")
+        return ""
+        
+    cache_dir = os.path.dirname(temp_video_path)
+    temp_audio_path = os.path.join(cache_dir, f"temp_audio_{int(time.time() * 1000)}.mp3")
+    
+    # ffmpeg arguments:
+    cmd = [
+        "ffmpeg", "-i", temp_video_path,
+        "-vn", "-acodec", "libmp3lame",
+        "-ar", "16000", "-ac", "1",
+        "-y", temp_audio_path
+    ]
+    
+    try:
+        print("[AudioExtract] Extracting audio stream via ffmpeg command line...")
+        startupinfo = None
+        if os.name == 'nt':
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15, startupinfo=startupinfo)
+        if result.returncode == 0 and os.path.exists(temp_audio_path) and os.path.getsize(temp_audio_path) > 0:
+            print(f"[AudioExtract] Success, size: {os.path.getsize(temp_audio_path)} bytes")
+            return temp_audio_path
+        else:
+            print(f"[AudioExtract] ffmpeg failed, code: {result.returncode}, error: {result.stderr}")
+            if os.path.exists(temp_audio_path):
+                try: os.remove(temp_audio_path)
+                except Exception: pass
+            return ""
+    except Exception as e:
+        print(f"[AudioExtract] Exception run: {e}")
+        if os.path.exists(temp_audio_path):
+            try: os.remove(temp_audio_path)
+            except Exception: pass
+        return ""
+
+
+def recognize_audio_features(audio_path, api_key):
+    import base64
+    import json
+    import urllib.request
+    
+    if not audio_path or not os.path.exists(audio_path):
+        print("[AudioRecognize] Audio file not found")
+        return ""
+        
+    try:
+        print("[AudioRecognize] Reading audio file and converting to base64...")
+        with open(audio_path, "rb") as f:
+            audio_data = f.read()
+        audio_b64 = base64.b64encode(audio_data).decode('utf-8')
+        audio_input = f"data:audio/mp3;base64,{audio_b64}"
+        
+        qwen_api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
+        
+        payload = {
+            "model": "qwen-audio-turbo",
+            "input": {
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"audio": audio_input},
+                            {"text": '你听到了什么BGM背景音乐、什么乐器、有无旁白、有么特定的物理音效（如爆炸、撞击、流水）或人声？请用纯中文在50字内枅简、专业地描述这段音频的声效特征，不要请废话。'}
+                        ]
+                    }
+                ]
+            },
+            "parameters": {}
+        }
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        print("[AudioRecognize] Requesting Qwen-Audio-Turbo model...")
+        data_bytes = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(qwen_api_url, headers=headers, data=data_bytes, method="POST")
+        
+        with urllib.request.urlopen(req, context=ctx, timeout=25) as resp:
+            res_data = resp.read().decode('utf-8')
+            res_json = json.loads(res_data)
+            
+        choices = res_json.get("output", {}).get("choices", [])
+        if not choices:
+            err_msg = res_json.get("message", "No response text")
+            print(f"[AudioRecognize] Model error: {err_msg}")
+            return ""
+            
+        audio_desc = choices[0].get("message", {}).get("content", "")
+        if isinstance(audio_desc, list):
+            audio_desc = "\n".join([item.get("text", "") for item in audio_desc if isinstance(item, dict)])
+            
+        audio_desc = audio_desc.strip()
+        print(f"[AudioRecognize] Success, desc: {audio_desc}")
+        return audio_desc
+        
+    except Exception as e:
+        print(f"[AudioRecognize] Exception: {e}")
+        return ""
+
+
+# 4. Core API: reverse video prompts (v1.2.0, support audio model reverse and VIP commercial cutoff)
 @app.route('/api/reverse', methods=['POST'])
 def reverse_prompt():
     import base64
@@ -744,46 +849,97 @@ def reverse_prompt():
     mode = data.get("mode", "2").strip()
     video_prompt = data.get("video_prompt", "").strip()
     video_url = data.get("video_url", "").strip()
+    audio_mode = data.get("audio_mode", "visual").strip()
     
     if not image_url and not image_base64 and not video_url:
-        return jsonify({"code": -1, "msg": "缺少图片链接、本地图片数据或视频链接"}), 400
+        return jsonify({"code": -1, "msg": '缺少图片连接、本å\x9c°图ç\x89\x87数据或视频连接'}), 400
     if not api_key:
-        return jsonify({"code": -1, "msg": "请先配置大模型 API Key（可在设置中填写）"}), 400
+        return jsonify({"code": -1, "msg": '请先配置大模型 API Key（可在设置中填写）'}), 400
         
-    print(f"收到 AI 视频反推请求，方案模式: {mode}，原版提示词长: {len(video_prompt)}，视频链接: {bool(video_url)}")
+    print(f"Reverse request, mode: {mode}, audio_mode: {audio_mode}, video_url: {bool(video_url)}")
     
-    # 1. 尝试自适应视频抽帧（双锚点镜头检测算法）
+    # === Commercial Cutoff Gateways (For Version and VIP Management) ===
+    user_level = data.get("user_level", "free").strip()
+    
+    if video_url and user_level == "free":
+        # Commercial cutoff logic for VIP:
+        # return jsonify({"code": 1001, "msg": '自适应分镜抽帧反推为【VIP专业版】特权功能，请升级后使用！'}), 403
+        pass
+        
+    if audio_mode == "listen" and user_level == "free":
+        # Commercial cutoff logic for SVIP:
+        # return jsonify({"code": 1002, "msg": s'自适应分镜抽帧反推为【VIP专业版】特权功能，请升级后使用！'}), 403
+        pass
+    # ====================================================================
+    
+    # 1. Download, keyframes extraction and audio extraction (One Download Multi Pipeline)
     keyframes = []
+    audio_features_desc = ""
+    temp_video_path = ""
+    temp_audio_path = ""
+    
     if video_url:
         try:
-            keyframes = extract_video_keyframes(video_url, max_frames=8)
+            temp_video_path = download_temp_video(video_url)
+            if temp_video_path:
+                try:
+                    keyframes = extract_video_keyframes_local(temp_video_path, max_frames=8)
+                except Exception as e:
+                    print(f"Warning: extract_video_keyframes_local failed: {e}")
+                
+                if audio_mode == "listen":
+                    try:
+                        print("[Reverse] Enabled listening mode, extracting audio...")
+                        temp_audio_path = extract_video_audio_local(temp_video_path)
+                        if temp_audio_path:
+                            audio_features_desc = recognize_audio_features(temp_audio_path, api_key)
+                    except Exception as e:
+                        print(f"Warning: extract_video_audio_local or recognize_audio_features failed: {e}")
+                    finally:
+                        if temp_audio_path and os.path.exists(temp_audio_path):
+                            try:
+                                os.remove(temp_audio_path)
+                                print("[Reverse] Temp audio deleted successfully.")
+                            except Exception:
+                                pass
         except Exception as e:
-            print(f"警告: OpenCV 视频自适应抽帧失败，将自动降级为封面图模式: {e}")
+            print(f"Warning: Video multimodal extraction failed: {e}")
+        finally:
+            if temp_video_path and os.path.exists(temp_video_path):
+                try:
+                    os.remove(temp_video_path)
+                    print("[Reverse] Temp video deleted successfully.")
+                except Exception:
+                    pass
             
-    # 2. 区分【多图分镜联合反推】与【单图封面反推】
     use_multi_images = len(keyframes) > 0
     content_list = []
     
     if use_multi_images:
-        print(f"成功进入 [多图分镜联合反推] 模式，共提取了 {len(keyframes)} 个关键帧。")
-        # 组装多张 Base64 关键帧图片到消息 content 中
+        print(f"[Reverse] Multi-image reverse mode, keyframes: {len(keyframes)}")
         for kf in keyframes:
             content_list.append({"image": kf["image_base64"]})
             
-        # 构建大模型关键帧时序指南，精确辅助大模型掌握剪辑过渡
-        keyframes_guide = "你被提供了一组按时间顺序排列的该视频关键帧画面，请仔细核对并以此来重构分镜剧本动作：\n"
+        keyframes_guide = "You are provided with a sequence of keyframes in chronological order:\n"
         for idx, kf in enumerate(keyframes):
-            keyframes_guide += f"- 画面 {idx + 1}：{kf['description']}\n"
+            keyframes_guide += f"- Keyframe {idx + 1}: {kf['description']}\n"
         keyframes_guide += "\n"
         
+        audio_features_guide = ""
+        if audio_mode == "listen" and audio_features_desc:
+            audio_features_guide = '根据 AI 音频模型对å\x8e\x9f视频的听音分析，该视频å\x8e\x9f声配乐及音效特征为：【' + audio_features_desc + '】。在å\x8f\x8d推的音ä¹\x90背景与配乐节点中，你必须以此真实音频特征为依æ\x8d®，将其融å\x85¥到提ç¤º词的配乐/音效描述中（例如å¦\x82果是古é£\x8e音乐，提ç¤º词中音乐背景又要å\x86\x99å\x8f¤é£\x8e，并在对åº\x94时间点安æ\x8e\x92å\x8f¤é£\x8e乐å\x99¨å\x8d¡点）。\n\n'
+        else:
+            audio_features_guide = '目前为视觉脑补音效模式，你应当根æ\x8d®画面意境，脑补最贴合视频画é\x9d¢的背景é\x9f³乐及é\x9f³效风æ\xa0¼，不要受真å®\x9e声音限å\x88¶。\n\n'
+            
         prompt_header = ""
         if video_prompt:
-            prompt_header = f"该视频作品的原版描述大纲提示词为：【{video_prompt}】。你必须以此描述中包含的主题和剧情为核心，不得偏离。\n\n"
+            prompt_header = '该视频作品的å\x8e\x9f版描述大纲提示词为：【' + video_prompt + '】。你必é¡»以此描述中包含的主题和å\x89§情为核心，不得偏离。\n\n'
             
         if mode == "1":
             prompt_text = (
                 f"{prompt_header}"
                 f"{keyframes_guide}"
+                f"{audio_features_guide}"
                 "请作为一名顶级的 AI 视频生成提示词导演专家，以上面这组按时序排列的静态关键帧为视觉参考，分析每个分镜里动作的变化与镜头转场逻辑（特别注意剪辑点‘变前最后一帧’与‘变后第一帧’的交界处），并严格结合视频的原版描述大纲作为剧情核心骨架，反向重构并脑补出用于直接在即梦里重新生成该动态视频的专业级 12秒 时序分镜剧本方案。\n\n"
                 "你必须严格按照以下格式直接输出，不要有任何多余的开头介绍、前言分析或结尾寄语，严禁在任何地方使用 Emoji 图形符号。输出格式如下：\n\n"
                 "[时长] 12秒\n"
@@ -800,11 +956,13 @@ def reverse_prompt():
                 "【硬性约束】：\n"
                 "1. 严格禁止在输出内容中带有任何 Emoji 字符。\n"
                 "2. 输出总字数必须严格控制在 600 字以内，字字珠玑，去粗取精。"
+            
             )
         else:
             prompt_text = (
                 f"{prompt_header}"
                 f"{keyframes_guide}"
+                f"{audio_features_guide}"
                 "请作为一名顶级的 AI 视频生成提示词导演专家，以上面这组按时序排列的静态关键帧为视觉参考，分析每个分镜里动作的变化与镜头转场逻辑，并严格结合视频的原版描述大纲作为核心剧情，反向重构并脑补出用于直接在即梦里生成视频的专业提示词。\n\n"
                 "【输出格式与硬性约束】：\n"
                 "1. 必须将画面主体、动作演变、分镜切换、衣服材质、镜头运镜、光影照明、色调氛围以及最契合该画面的声音配乐氛围，完全融合成一整段连贯、画面感极强的中文叙事长句。不得使用数字序号，不得带有任何分类标签前缀，不得使用 Markdown 列表或任何分段，必须是仅有一段的纯文本叙事。\n"
@@ -812,17 +970,16 @@ def reverse_prompt():
                 "3. 整体提示词必须要融入对分镜切换时序（如 0秒、3秒、6秒、9秒等镜头如何切换和过渡）的动作连贯性描述。\n"
                 "4. 严格禁止在输出文本中出现任何 Emoji 图标符号。\n"
                 "5. 整体总字数必须严格控制在 600 字以内，文字需展现出电影美感与高度视觉张力，短小精悍，无任何闲聊或前后缀说明，直接输出这一整段提示词内容。"
+            
             )
             
         content_list.append({"text": prompt_text})
         
     else:
-        # 降级或单图反推分支
-        print("进入 [单图封面反推] 降级分支。")
-        # 优先使用前端直传的 Base64，否则后端下载网络图片并转成 Base64
+        print("Entering single image fallback branch.")
         if image_base64:
             image_input = image_base64
-            print("使用前端直接上传的本地图片数据流。")
+            print("Using front-end base64 image data.")
         else:
             image_input = image_url
             try:
@@ -830,26 +987,27 @@ def reverse_prompt():
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                     'Referer': 'https://jimeng.jianying.com/'
                 }
-                print("后端正在代理下载图片并转换为 Base64 数据流...")
+                print("Downloading network image for base64 conversion...")
                 img_req = urllib.request.Request(image_url, headers=img_headers)
                 with urllib.request.urlopen(img_req, context=ctx, timeout=15) as img_resp:
                     img_data = img_resp.read()
                     content_type = img_resp.headers.get('Content-Type', 'image/jpeg')
                 base64_data = base64.b64encode(img_data).decode('utf-8')
                 image_input = f"data:{content_type};base64,{base64_data}"
-                print("图片 Base64 转换成功！")
+                print("Image base64 converted successfully.")
             except Exception as e:
-                print(f"警告: 后端图片转 Base64 失败，回退到使用原 URL 请求大模型: {e}")
+                print(f"Warning: image base64 conversion failed: {e}")
                 image_input = image_url
                 
         content_list.append({"image": image_input})
         
         prompt_header = ""
         if video_prompt:
-            prompt_header = f"该视频作品的原版中文描述提示词为：【{video_prompt}】。你必须严格以此描述中包含的剧情故事为核心，不得偏离。\n\n"
+            prompt_header = '该视频作品的å\x8e\x9f版描述大纲提示词为：【' + video_prompt + '】。你必é¡»以此描述中包含的主题和å\x89§情为核心，不得偏离。\n\n'
             
         if mode == "1":
             prompt_text = (
+                f"{prompt_header}"
                 "你看到的这张图片是一段由 AI 生成的动态视频的核心封面或第一帧。\n"
                 f"{prompt_header}"
                 "请作为一名顶级的 AI 视频生成提示词导演专家，以此静态画面为视觉参考，并严格结合该视频的原版描述提示词作为剧情核心骨架，反向重构并脑补扩展出用于生成该动态视频的专业级 12秒 时序分镜剧本方案。\n\n"
@@ -868,9 +1026,11 @@ def reverse_prompt():
                 "【硬性约束】：\n"
                 "1. 严格禁止在输出内容中带有任何 Emoji 字符。\n"
                 "2. 输出总字数必须严格控制在 600 字以内，字字珠玑，去粗取精。"
+            
             )
         else:
             prompt_text = (
+                f"{prompt_header}"
                 "你看到的这张图片是一段由 AI 生成的动态视频的核心封面或第一帧。\n"
                 f"{prompt_header}"
                 "请作为一名顶级的 AI 视频生成提示词导演专家，以此静态画面为视觉参考，并严格结合该视频的原版描述提示词作为剧情核心，反向重构并脑补出用于直接生成视频的专业提示词。\n\n"
@@ -879,11 +1039,11 @@ def reverse_prompt():
                 "2. 中文长句中要非常自然地夹带英文专业术语或指令（如 close-up, cinematic lighting, volumetric light, slow panning, sub-bass pulse 等）。\n"
                 "3. 严格禁止在输出文本中出现任何 Emoji 图标符号。\n"
                 "4. 整体总字数必须严格控制在 600 字以内，文字需展现出电影美感与高度视觉张力，短小精悍，无 any 闲聊或前后缀说明，直接输出这一整段提示词内容。"
+            
             )
             
         content_list.append({"text": prompt_text})
         
-    # 3. 构造 Qwen-VL-Max 的多模态 Payload 请求
     qwen_api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
     payload = {
         "model": "qwen-vl-max",
@@ -912,8 +1072,8 @@ def reverse_prompt():
             
         choices = res_json.get("output", {}).get("choices", [])
         if not choices:
-            err_msg = res_json.get("message", "接口未返回有效文本，请检查 API Key 权限或余额")
-            return jsonify({"code": -1, "msg": f"AI 反推失败: {err_msg}"}), 500
+            err_msg = res_json.get("message", "No text returned from API")
+            return jsonify({"code": -1, "msg": f"AI reverse failed: {err_msg}"}), 500
             
         reversed_text = choices[0].get("message", {}).get("content", "")
         if isinstance(reversed_text, list):
@@ -927,7 +1087,7 @@ def reverse_prompt():
             }
         })
     except Exception as e:
-        return jsonify({"code": -1, "msg": f"请求阿里大模型失败: {str(e)}，请确认您的 API Key 填写正确且接口可用"}), 500
+        return jsonify({"code": -1, "msg": f"Failed requesting Alibaba model: {str(e)}"}), 500
 
 # 5. 核心接口：代理中转下载接口（穿透字节 CDN 403 拦截）
 @app.route('/api/download', methods=['GET'])
