@@ -951,7 +951,7 @@ def recognize_audio_features(audio_path, api_key):
         audio_b64 = base64.b64encode(audio_data).decode('utf-8')
         audio_input = f"data:audio/mp3;base64,{audio_b64}"
         
-        qwen_api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
+        qwen_api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
         
         payload = {
             "model": "qwen-audio-turbo",
@@ -1082,7 +1082,7 @@ def reverse_prompt():
     if use_multi_images:
         print(f"[Reverse] Multi-image reverse mode, keyframes: {len(keyframes)}")
         for kf in keyframes:
-            content_list.append({"type": "image_url", "image_url": {"url": kf["image_base64"]}})
+            content_list.append({"image": kf["image_base64"]})
             
         keyframes_guide = "You are provided with a sequence of keyframes in chronological order:\n"
         for idx, kf in enumerate(keyframes):
@@ -1137,7 +1137,7 @@ def reverse_prompt():
             
             )
             
-        content_list.append({"type": "text", "text": prompt_text})
+        content_list.append({"text": prompt_text})
         
     else:
         print("Entering single image fallback branch.")
@@ -1162,8 +1162,8 @@ def reverse_prompt():
             except Exception as e:
                 print(f"Warning: image base64 conversion failed: {e}")
                 image_input = image_url
-                
-        content_list.append({"type": "image_url", "image_url": {"url": image_input}})
+        
+        content_list.append({"image": image_input})
         
         prompt_header = ""
         if video_prompt:
@@ -1206,9 +1206,9 @@ def reverse_prompt():
             
             )
             
-        content_list.append({"type": "text", "text": prompt_text})
+        content_list.append({"text": prompt_text})
         
-    qwen_api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
+    qwen_api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
     payload = {
         "model": "qwen-vl-max",
         "input": {
