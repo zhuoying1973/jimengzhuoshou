@@ -727,6 +727,169 @@ def extract_video_keyframes(video_url, max_frames=8):
     return keyframes
 
 
+def download_temp_video(video_url):
+    import time
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://jimeng.jianying.com/',
+        'Origin': 'https://jimeng.jianying.com'
+    }
+    cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scratch")
+    os.makedirs(cache_dir, exist_ok=True)
+    temp_video_path = os.path.join(cache_dir, f"temp_detect_{int(time.time() * 1000)}.mp4")
+    try:
+        print(f"[下载助手] 正在下载临时视频: {video_url[:80]}...")
+        req = urllib.request.Request(video_url, headers=headers)
+        with urllib.request.urlopen(req, context=ctx, timeout=20) as resp:
+            with open(temp_video_path, "wb") as f:
+                f.write(resp.read())
+        print(f"[下载助手] 临时视频下载完成，大小: {os.path.getsize(temp_video_path)} 字节")
+        return temp_video_path
+    except Exception as e:
+        print(f"[下载助手] 下载视频失败: {e}")
+        if os.path.exists(temp_video_path):
+            try: os.remove(temp_video_path)
+            except Exception: pass
+        return ""
+
+
+def extract_video_keyframes_local(temp_video_path, max_frames=8):
+    import base64
+    import cv2
+    
+    if not temp_video_path or not os.path.exists(temp_video_path):
+        print("[抽帧助手] 本地临时视频文件不存在")
+        return []
+        
+    cap = None
+    keyframes = []
+    try:
+        cap = cv2.VideoCapture(temp_video_path)
+        if not cap.isOpened():
+            print("[抽帧助手] OpenCV 无法打开视频文件")
+            return []
+            
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if fps <= 0 or total_frames <= 0:
+            print("[抽帧助手] 视频元数据获取失败")
+            return []
+            
+        duration = total_frames / fps
+        print(f"[抽帧助手] 视频属性：帧率={fps:.2f}, 总帧数={total_frames}, 时长={duration:.2f}秒")
+        
+        # 帧差异直方图扫描（每2帧采样一次）
+        histograms = []
+        sampled_indices = []
+        step = 2
+        
+        for idx in range(0, total_frames, step):
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+            ret, frame = cap.read()
+            if not ret:
+                break
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            hist = cv2.calcHist([hsv], [0, 1], None, [30, 32], [0, 180, 0, 256])
+            cv2.normalize(hist, hist)
+            histograms.append(hist)
+            sampled_indices.append(idx)
+            
+        # 计算直方图相关性
+        correlations = []
+        for i in range(len(histograms) - 1):
+            score = cv2.compareHist(histograms[i], histograms[i+1], cv2.HISTCMP_CORREL)
+            correlations.append((sampled_indices[i], sampled_indices[i+1], score))
+            
+        # 镜头切换点判断
+        cut_candidates = []
+        for start_idx, end_idx, score in correlations:
+            if score < 0.65:
+                cut_candidates.append((start_idx, end_idx, score))
+        print(f"[抽帧助手] 检测到 {len(cut_candidates)} 个剪辑转场点。")
+        
+        # 黄金双锚点组合
+        frames_to_extract = set()
+        frames_to_extract.add(0)
+        frames_to_extract.add(total_frames - 1)
+        for start_idx, end_idx, score in cut_candidates:
+            frames_to_extract.add(start_idx)
+            frames_to_extract.add(end_idx)
+            
+        sorted_extract_indices = sorted(list(frames_to_extract))
+        
+        if len(sorted_extract_indices) > max_frames:
+            print(f"[抽帧助手] 待提取帧数超过上限 {max_frames}，进行显著度裁剪...")
+            essential_indices = {0, total_frames - 1}
+            cut_candidates.sort(key=lambda x: x[2])
+            for start_idx, end_idx, score in cut_candidates:
+                if len(essential_indices) + 2 <= max_frames:
+                    essential_indices.add(start_idx)
+                    essential_indices.add(end_idx)
+                else:
+                    break
+            sorted_extract_indices = sorted(list(essential_indices))
+            
+        print(f"[抽帧助手] 最终关键帧集合: {sorted_extract_indices}")
+        
+        for frame_idx in sorted_extract_indices:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+            ret, frame = cap.read()
+            if not ret:
+                continue
+                
+            time_offset = frame_idx / fps
+            
+            h, w = frame.shape[:2]
+            max_size = 800
+            if max(h, w) > max_size:
+                scale = max_size / max(h, w)
+                frame_resized = cv2.resize(frame, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+            else:
+                frame_resized = frame
+                
+            success, encoded_img = cv2.imencode('.jpg', frame_resized, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+            if not success:
+                continue
+                
+            img_b64 = base64.b64encode(encoded_img).decode('utf-8')
+            
+            if frame_idx == 0:
+                desc = "视频开始（第 0 秒）起点画面"
+            elif frame_idx == total_frames - 1:
+                desc = f"视频结束（第 {time_offset:.1f} 秒）尾声定格画面"
+            else:
+                is_before = False
+                is_after = False
+                for s_idx, e_idx, _ in cut_candidates:
+                    if frame_idx == s_idx:
+                        is_before = True
+                        break
+                    if frame_idx == e_idx:
+                        is_after = True
+                        break
+                if is_before:
+                    desc = f"镜头切换前最后一帧（第 {time_offset:.1f} 秒，上一个分镜的结束画面）"
+                elif is_after:
+                    desc = f"镜头切换后第一帧（第 {time_offset:.1f} 秒，下一个新分镜的开始画面）"
+                else:
+                    desc = f"第 {time_offset:.1f} 秒关键帧画面"
+                    
+            keyframes.append({
+                "time_offset": time_offset,
+                "image_base64": f"data:image/jpeg;base64,{img_b64}",
+                "description": desc
+            })
+            
+    except Exception as e:
+        print(f"[抽帧助手] 本地抽帧失败: {e}")
+    finally:
+        if cap is not None:
+            try: cap.release()
+            except Exception: pass
+            
+    return keyframes
+
+
 def extract_video_audio_local(temp_video_path):
     import subprocess
     import time
