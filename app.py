@@ -492,7 +492,7 @@ def generate_prompt():
         f"指定声音配乐：{selected_audio}"
     )
     
-    qwen_api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
+    qwen_api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
     
     payload = {
         "model": "qwen-plus",
@@ -961,7 +961,7 @@ def recognize_audio_features(audio_path, api_key):
                         "role": "user",
                         "content": [
                             {"audio": audio_input},
-                            {"text": '你听到了什么BGM背景音乐、什么乐器、有无旁白、有么特定的物理音效（如爆炸、撞击、流水）或人声？请用纯中文在50字内枅简、专业地描述这段音频的声效特征，不要请废话。'}
+                            {"text": '你听到了什么BGM背景音乐、什么乐器、是否有旁白/独白/人声？如果存在人声旁白，请务必详细听写并记录下旁白台词的具体文字内容，以及讲述者的声线特征（如低沉、磁性、知性等）。请用纯中文专业、精炼地描述这段音频的声效特征与旁白台词，控制在120字以内。'}
                         ]
                     }
                 ]
