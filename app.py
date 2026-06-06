@@ -242,8 +242,10 @@ def parse_link():
                 
             # 去重合并作品
             work_exists = False
+            existing_tags = []
             for w in author_record["works"]:
                 if w["id"] == published_item_id:
+                    existing_tags = w.setdefault("tags", [])
                     w["like_count"] = like_count
                     w["usage_count"] = usage_count
                     w["prompt"] = description
@@ -269,7 +271,8 @@ def parse_link():
                     "usage_count": usage_count,
                     "has_prompt": len(description.strip()) > 0,
                     "episodes_count": ep_cnt,
-                    "is_original": is_original
+                    "is_original": is_original,
+                    "tags": []
                 })
                 
             # 存回本地
@@ -293,7 +296,8 @@ def parse_link():
                 "cover_url": cover_url,
                 "like_count": like_count,
                 "usage_count": usage_count,
-                "is_original": is_original
+                "is_original": is_original,
+                "tags": existing_tags if work_exists else []
             }
         })
         
@@ -322,6 +326,11 @@ def get_author_works():
         
     author_info = cache_data.get(sec_uid, {"author_name": "未知创作者", "author_avatar": "", "works": []})
     
+    # 确保 works 中每一项都带 tags 属性（setdefault）
+    if "works" in author_info:
+        for w in author_info["works"]:
+            w.setdefault("tags", [])
+            
     # 按照作品 ID (即发布顺序的雪花大数) 倒序排列，保证最新的在网格最前
     if "works" in author_info:
         try:
@@ -371,6 +380,8 @@ def get_favorites_list():
     try:
         with open(fav_path, "r", encoding="utf-8") as f:
             fav_data = json.load(f)
+        for w in fav_data:
+            w.setdefault("tags", [])
         return jsonify({"code": 0, "data": fav_data})
     except Exception:
         return jsonify({"code": -1, "msg": "读取收集夹失败"}), 500
@@ -437,6 +448,73 @@ def remove_favorite():
         return jsonify({"code": 0, "msg": "已从收集夹移除"})
     except Exception as e:
         return jsonify({"code": -1, "msg": f"更新收集数据库失败: {str(e)}"}), 500
+
+# 8.0 新增接口：更新作品标签
+@app.route('/api/work/tags/update', methods=['POST'])
+def update_work_tags():
+    data = request.json or {}
+    work_id = data.get("work_id", "").strip()
+    sec_uid = data.get("sec_uid", "").strip()
+    tags = data.get("tags", [])
+    
+    if not work_id:
+        return jsonify({"code": -1, "msg": "缺少作品 ID 参数"}), 400
+    if not isinstance(tags, list):
+        return jsonify({"code": -1, "msg": "标签格式不正确"}), 400
+        
+    # 清洗标签：去除空格，剔除空字符串，去重
+    tags = list(set([t.strip() for t in tags if isinstance(t, str) and t.strip()]))
+    
+    cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scratch")
+    cache_path = os.path.join(cache_dir, "parsed_authors_cache.json")
+    fav_path = os.path.join(cache_dir, "favorites_cache.json")
+    
+    updated_author = False
+    updated_fav = False
+    
+    # 1. 更新作者数据库中的作品标签
+    if sec_uid and os.path.exists(cache_path):
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                cache_data = json.load(f)
+            
+            if sec_uid in cache_data:
+                for w in cache_data[sec_uid].get("works", []):
+                    if w["id"] == work_id:
+                        w["tags"] = tags
+                        updated_author = True
+                        break
+                
+                if updated_author:
+                    with open(cache_path, "w", encoding="utf-8") as f:
+                        json.dump(cache_data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"[Tags] 更新作者缓存数据库出错: {e}")
+            return jsonify({"code": -1, "msg": f"更新作者数据库失败: {str(e)}"}), 500
+            
+    # 2. 更新收藏夹数据库中的作品标签
+    if os.path.exists(fav_path):
+        try:
+            with open(fav_path, "r", encoding="utf-8") as f:
+                fav_data = json.load(f)
+            
+            for w in fav_data:
+                if w["id"] == work_id:
+                    w["tags"] = tags
+                    updated_fav = True
+                    break
+                    
+            if updated_fav:
+                with open(fav_path, "w", encoding="utf-8") as f:
+                    json.dump(fav_data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"[Tags] 更新收藏夹数据库出错: {e}")
+            return jsonify({"code": -1, "msg": f"更新收藏夹数据库失败: {str(e)}"}), 500
+            
+    if not updated_author and not updated_fav:
+        return jsonify({"code": -1, "msg": "未在数据库中找到对应的作品，更新标签失败"}), 404
+        
+    return jsonify({"code": 0, "msg": "标签更新成功", "data": {"tags": tags}})
 
 # 3.5 2.0 新增接口：AI 创意提示词工坊，将基本创意智能扩写为 15秒电影级短视频双版本词
 @app.route('/api/prompt/generate', methods=['POST'])

@@ -1051,6 +1051,350 @@
             align-items: center;
             gap: 4px;
         }
+
+        /* 8.0 彩色标签云筛选栏 */
+        .tags-cloud-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+
+        .tags-cloud-title {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tags-list-wrapper {
+            display: flex;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            gap: 8px;
+            padding: 4px 2px 8px 2px;
+            scrollbar-width: none;
+        }
+        .tags-list-wrapper::-webkit-scrollbar {
+            display: none;
+        }
+
+        .tag-cloud-item {
+            flex: 0 0 auto;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--text-secondary);
+            user-select: none;
+        }
+
+        .tag-cloud-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateY(-1px);
+        }
+
+        .tag-cloud-item.active {
+            color: #fff;
+            border-color: var(--neon-pink);
+            background: rgba(255, 0, 127, 0.1);
+            box-shadow: 0 0 10px rgba(255, 0, 127, 0.3);
+        }
+
+        /* 作品缩略图上的标签展示 */
+        .work-tags-overlay {
+            position: absolute;
+            bottom: 30px;
+            left: 8px;
+            right: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            z-index: 5;
+            pointer-events: auto;
+        }
+
+        .work-mini-tag {
+            font-size: 9px;
+            font-weight: 600;
+            color: #00f0ff;
+            background: rgba(0, 240, 255, 0.12);
+            border: 1px solid rgba(0, 240, 255, 0.25);
+            padding: 1px 5px;
+            border-radius: 4px;
+            text-shadow: 0 0 5px rgba(0, 240, 255, 0.2);
+            cursor: pointer;
+        }
+
+        .work-mini-tag:hover {
+            background: rgba(0, 240, 255, 0.25);
+            border-color: var(--neon-blue);
+        }
+
+        /* 卡片右上角的编辑标签触发按钮 */
+        .btn-tag-edit-trigger {
+            position: absolute;
+            top: 12px;
+            left: 42px;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 6px;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(5px);
+            transition: all 0.2s;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        .btn-tag-edit-trigger:hover {
+            border-color: var(--neon-blue);
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+        }
+
+        /* 解析结果区域的标签行 */
+        .detail-tags-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .detail-tag-item {
+            font-size: 11px;
+            font-weight: 600;
+            color: #00f0ff;
+            background: rgba(0, 240, 255, 0.08);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            padding: 3px 8px;
+            border-radius: 6px;
+            text-shadow: 0 0 5px rgba(0, 240, 255, 0.2);
+            cursor: pointer;
+        }
+
+        .detail-tag-item:hover {
+            background: rgba(0, 240, 255, 0.18);
+            border-color: var(--neon-blue);
+        }
+
+        .btn-detail-tag-edit {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 3px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-detail-tag-edit:hover {
+            border-color: var(--neon-blue);
+            color: #fff;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* 局部内聚悬浮 Popover 气泡编辑器 */
+        .tag-editor-popover {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            z-index: 100;
+            background: rgba(10, 16, 40, 0.95);
+            border: 1.5px solid rgba(0, 240, 255, 0.3);
+            border-radius: 16px;
+            padding: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 15px rgba(0, 240, 255, 0.15);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            animation: popoverFadeIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.15);
+        }
+
+        .result-popover-container {
+            position: relative;
+            width: 100%;
+        }
+
+        .result-tag-editor-popover {
+            position: absolute;
+            top: calc(100% + 5px);
+            left: 0;
+            z-index: 100;
+            width: 280px;
+            background: rgba(10, 16, 40, 0.95);
+            border: 1.5px solid rgba(0, 240, 255, 0.3);
+            border-radius: 16px;
+            padding: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 15px rgba(0, 240, 255, 0.15);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            animation: popoverFadeIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.15);
+        }
+
+        @keyframes popoverFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95) translateY(5px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .popover-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .popover-close {
+            cursor: pointer;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .popover-close:hover {
+            color: var(--neon-pink);
+        }
+
+        .popover-current-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            max-height: 50px;
+            overflow-y: auto;
+        }
+
+        .popover-tag-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            color: #fff;
+            background: rgba(255, 0, 127, 0.12);
+            border: 1px solid rgba(255, 0, 127, 0.25);
+            padding: 2px 6px;
+            border-radius: 6px;
+        }
+
+        .popover-tag-badge i {
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .popover-tag-badge i:hover {
+            color: #fff;
+        }
+
+        .popover-input-row {
+            display: flex;
+            gap: 6px;
+        }
+
+        .popover-input {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 6px 8px;
+            color: #fff;
+            font-size: 11px;
+            outline: none;
+        }
+
+        .popover-input:focus {
+            border-color: var(--neon-blue);
+        }
+
+        .btn-popover-add {
+            background: var(--neon-blue);
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            padding: 0 10px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .popover-history-section {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .popover-history-title {
+            font-size: 9px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .popover-history-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            max-height: 40px;
+            overflow-y: auto;
+        }
+
+        .popover-history-tag-item {
+            font-size: 9px;
+            color: var(--text-secondary);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 1px 5px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .popover-history-tag-item:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .popover-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        .btn-popover-save {
+            background: var(--accent-glow);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 4px 10px;
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -1117,6 +1461,34 @@
                     <div class="author-card-info">
                         <span class="author-card-name">{{ author.author_name }}</span>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 8.0 彩色标签云筛选栏 -->
+        <div v-if="allTags.length > 0" class="glass-card tags-cloud-panel" style="padding: 15px 20px;">
+            <div class="tags-cloud-title">
+                <i class="fa-solid fa-tags" style="color: var(--neon-pink)"></i>
+                <span>标签分类检索:</span>
+                <span v-if="selectedTag" style="font-size: 11px; color: var(--neon-blue); cursor: pointer; text-decoration: underline;" @click="selectedTag = ''">清除筛选</span>
+            </div>
+            <div class="tags-list-wrapper">
+                <div 
+                    class="tag-cloud-item" 
+                    :class="{ active: !selectedTag }"
+                    @click="selectedTag = ''"
+                >
+                    全部作品
+                </div>
+                <div 
+                    v-for="tag in allTags" 
+                    :key="tag"
+                    class="tag-cloud-item"
+                    :class="{ active: selectedTag === tag }"
+                    :style="selectedTag === tag ? {} : getTagColorStyle(tag)"
+                    @click="selectedTag = tag"
+                >
+                    {{ tag }}
                 </div>
             </div>
         </div>
@@ -1274,6 +1646,76 @@
                 </button>
             </div>
 
+            <!-- 8.0 大图作品已打标签展示与编辑触发 -->
+            <div class="result-popover-container">
+                <div class="detail-tags-row">
+                    <span style="font-size: 11px; color: var(--text-secondary); font-weight: 600; display:flex; align-items:center; gap:4px;">
+                        <i class="fa-solid fa-tags" style="color: var(--neon-blue)"></i> 作品标签:
+                    </span>
+                    <span v-if="!result.tags || result.tags.length === 0" style="font-size: 11px; color: var(--text-secondary); font-style: italic; margin-right: 8px;">暂无标签</span>
+                    <span 
+                        v-for="tag in result.tags" 
+                        :key="tag"
+                        class="detail-tag-item"
+                        :style="getTagColorStyle(tag)"
+                        @click="selectedTag = tag"
+                    >
+                        {{ tag }}
+                    </span>
+                    <button class="btn-detail-tag-edit" @click.stop="openResultTagEditor(result, $event)">
+                        <i class="fa-solid fa-pen-to-square"></i> 编辑标签
+                    </button>
+                </div>
+
+                <!-- 8.0 详情页的悬浮 Popover 气泡编辑器 -->
+                <div v-if="isEditingResultWork" class="result-tag-editor-popover" @click.stop>
+                    <div class="popover-header">
+                        <span><i class="fa-solid fa-tags" style="color: var(--neon-blue); margin-right: 4px;"></i> 编辑作品标签</span>
+                        <i class="fa-solid fa-times popover-close" @click="closeTagEditor"></i>
+                    </div>
+                    
+                    <div class="popover-current-tags">
+                        <span v-if="editingWorkTags.length === 0" style="font-size:10px; color:var(--text-secondary); font-style:italic;">暂无标签</span>
+                        <span v-for="tag in editingWorkTags" :key="tag" class="popover-tag-badge" :style="getTagColorStyle(tag)">
+                            {{ tag }}
+                            <i class="fa-solid fa-xmark" @click="removeEditingTag(tag)"></i>
+                        </span>
+                    </div>
+                    
+                    <div class="popover-input-row">
+                        <input 
+                            type="text" 
+                            class="popover-input" 
+                            v-model="newTagInput" 
+                            placeholder="输入新标签按回车"
+                            @keyup.enter="addEditingTag"
+                        >
+                        <button class="btn-popover-add" @click="addEditingTag">添加</button>
+                    </div>
+                    
+                    <div v-if="historyTags.length > 0" class="popover-history-section">
+                        <span class="popover-history-title">常用标签推荐 (点击添加):</span>
+                        <div class="popover-history-tags">
+                            <span 
+                                v-for="tag in historyTags" 
+                                :key="tag" 
+                                class="popover-history-tag-item"
+                                @click="addEditingTagFromHistory(tag)"
+                            >
+                                {{ tag }}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="popover-actions">
+                        <button class="btn-popover-save" :disabled="savingTags" @click="saveWorkTags">
+                            <span v-if="savingTags"><i class="fa-solid fa-spinner fa-spin"></i> 保存中</span>
+                            <span v-else>保存标签</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- 抓取出的原版提示词 -->
             <div class="section-title">
                 <span>原版提示词描述 (Description)</span>
@@ -1378,6 +1820,11 @@
                     <div v-if="!isShowingFavorites" class="work-checkbox" @click.stop>
                         <input type="checkbox" :value="work.id" v-model="selectedWorks">
                     </div>
+
+                    <!-- 编辑标签按钮 (Popover 触发器) -->
+                    <div class="btn-tag-edit-trigger" @click.stop="openTagEditor(work, $event)" title="修改作品标签">
+                        <i class="fa-solid fa-tag"></i>
+                    </div>
                     
                     <!-- 缩略图预览及点击切换 -->
                     <div class="work-thumb-wrapper" @click="selectWork(work)">
@@ -1398,11 +1845,75 @@
                                 <i class="fa-solid fa-star"></i> 已收集
                             </span>
                         </div>
+
+                        <!-- 8.0 缩略图底部小标签覆盖层 (展示前 2 个) -->
+                        <div v-if="work.tags && work.tags.length > 0" class="work-tags-overlay" @click.stop>
+                            <span 
+                                v-for="tag in work.tags.slice(0, 2)" 
+                                :key="tag" 
+                                class="work-mini-tag"
+                                :style="getTagColorStyle(tag)"
+                                @click="selectedTag = tag"
+                            >
+                                {{ tag }}
+                            </span>
+                        </div>
                         
                         <!-- 数据统计毛玻璃浮层 -->
                         <div class="work-stats-bar">
                             <span><i class="fa-solid fa-heart" style="color:var(--neon-pink)"></i> {{ formatCount(work.like_count) }}</span>
                             <span><i class="fa-solid fa-play" style="color:var(--neon-blue)"></i> {{ formatCount(work.usage_count) }}跟拍</span>
+                        </div>
+                    </div>
+
+                    <!-- 8.0 局部内聚悬浮 Popover 气泡编辑器 -->
+                    <div v-if="isEditingWork(work.id)" class="tag-editor-popover" @click.stop>
+                        <div class="popover-header">
+                            <span><i class="fa-solid fa-tags" style="color: var(--neon-blue); margin-right: 4px;"></i> 编辑作品标签</span>
+                            <i class="fa-solid fa-times popover-close" @click="closeTagEditor"></i>
+                        </div>
+                        
+                        <!-- 当前拥有的标签 -->
+                        <div class="popover-current-tags">
+                            <span v-if="editingWorkTags.length === 0" style="font-size:10px; color:var(--text-secondary); font-style:italic;">暂无标签</span>
+                            <span v-for="tag in editingWorkTags" :key="tag" class="popover-tag-badge" :style="getTagColorStyle(tag)">
+                                {{ tag }}
+                                <i class="fa-solid fa-xmark" @click="removeEditingTag(tag)"></i>
+                            </span>
+                        </div>
+                        
+                        <!-- 输入框 -->
+                        <div class="popover-input-row">
+                            <input 
+                                type="text" 
+                                class="popover-input" 
+                                v-model="newTagInput" 
+                                placeholder="回车添加标签"
+                                @keyup.enter="addEditingTag"
+                            >
+                            <button class="btn-popover-add" @click="addEditingTag">添加</button>
+                        </div>
+                        
+                        <!-- 历史标签推荐 -->
+                        <div v-if="historyTags.length > 0" class="popover-history-section">
+                            <span class="popover-history-title">常用推荐 (点击添加):</span>
+                            <div class="popover-history-tags">
+                                <span 
+                                    v-for="tag in historyTags" 
+                                    :key="tag" 
+                                    class="popover-history-tag-item"
+                                    @click="addEditingTagFromHistory(tag)"
+                                >
+                                    {{ tag }}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="popover-actions">
+                            <button class="btn-popover-save" :disabled="savingTags" @click="saveWorkTags">
+                                <span v-if="savingTags"><i class="fa-solid fa-spinner fa-spin"></i> 保存中</span>
+                                <span v-else>保存标签</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1491,7 +2002,7 @@
                             <i class="fa-solid fa-copy"></i> 复制提示词
                         </button>
                         <button class="btn-secondary btn-glow-pink" style="flex:1;" @click="sendToInspiration">
-                            <i class="fa-solid fa-wand-magic-sparkles"></i> ✨ 送入创意工坊再润色
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> 送入创意工坊再润色
                         </button>
                     </div>
                 </div>
@@ -1605,7 +2116,7 @@
                 <!-- 版本 A：时间轴版 -->
                 <div v-if="promptResultA">
                     <div class="section-title">
-                        <span>版本 A：🎬 15秒分镜时间轴控制版</span>
+                        <span>版本 A：<i class="fa-solid fa-clapperboard" style="color: var(--neon-pink); margin-right: 4px;"></i> 15秒分镜时间轴控制版</span>
                         <button class="btn-copy-mini" @click="copyText(promptResultA)">一键复制 A</button>
                     </div>
                     <div class="prompt-box" style="border-color: rgba(255, 0, 127, 0.2); background:rgba(0,0,0,0.3); font-size:13px; line-height:1.6; margin-bottom:0;">
@@ -1616,7 +2127,7 @@
                 <!-- 版本 B：长句融合版 -->
                 <div v-if="promptResultB">
                     <div class="section-title" style="margin-top:5px;">
-                        <span>版本 B：🎥 电影级长句融合版 (首选)</span>
+                        <span>版本 B：<i class="fa-solid fa-video" style="color: var(--neon-blue); margin-right: 4px;"></i> 电影级长句融合版 (首选)</span>
                         <button class="btn-copy-mini" @click="copyText(promptResultB)">一键复制 B</button>
                     </div>
                     <div class="prompt-box" style="border-color: rgba(0, 240, 255, 0.2); background:rgba(0,0,0,0.3); font-size:13px; line-height:1.6; margin-bottom:0;">
@@ -1693,6 +2204,14 @@
                 const filterHasEpisodes = ref(false);
                 const toast = ref({ show: false, msg: '' });
 
+                // 8.0 标签功能响应式状态
+                const selectedTag = ref('');
+                const editingWorkId = ref(null);
+                const isEditingResultWork = ref(false);
+                const editingWorkTags = ref([]);
+                const newTagInput = ref('');
+                const savingTags = ref(false);
+
                 const onVideoUnmount = (vnode) => {
                     const video = vnode.el;
                     if (video) {
@@ -1729,6 +2248,7 @@
                 };
 
                 const selectFavoritesTab = () => {
+                    closeTagEditor();
                     isShowingFavorites.value = true;
                     if (result.value) {
                         result.value.sec_uid = '';
@@ -1905,6 +2425,7 @@
                 };
 
                 const handleParse = async () => {
+                    closeTagEditor();
                     if (!shareInput.value.trim()) return;
                     const videoElements = document.querySelectorAll('video');
                     videoElements.forEach(video => {
@@ -1949,6 +2470,7 @@
                 };
 
                 const selectActiveAuthor = async (author) => {
+                    closeTagEditor();
                     loading.value = true;
                     isShowingFavorites.value = false;
                     result.value = null;
@@ -2011,7 +2533,21 @@
                     return list;
                 });
 
-                const filteredWorks = computed(() => {
+                const getTagColorStyle = (tag) => {
+                    if (!tag) return {};
+                    let hash = 0;
+                    for (let i = 0; i < tag.length; i++) {
+                        hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+                    }
+                    const h = Math.abs(hash % 360);
+                    return {
+                        color: `hsl(${h}, 90%, 75%)`,
+                        borderColor: `hsla(${h}, 90%, 75%, 0.3)`,
+                        background: `hsla(${h}, 90%, 75%, 0.08)`
+                    };
+                };
+
+                const rawFilteredList = computed(() => {
                     let list = isShowingFavorites.value ? [...favoriteWorks.value] : (authorWorks.value ? [...authorWorks.value.works] : []);
                     // 提示词有无筛选
                     if (promptFilter.value === 'has') {
@@ -2020,12 +2556,49 @@
                         list = list.filter(w => !(w.has_prompt || (w.prompt && w.prompt.trim().length > 0)));
                     }
                     if (filterHasEpisodes.value) list = list.filter(w => w.episodes_count > 1);
+                    return list;
+                });
+
+                // 彩色霓虹标签云（去重提取当前列表有过的所有标签）
+                const allTags = computed(() => {
+                    const tagsSet = new Set();
+                    rawFilteredList.value.forEach(w => {
+                        if (w.tags && Array.isArray(w.tags)) {
+                            w.tags.forEach(t => {
+                                if (t && t.trim()) tagsSet.add(t.trim());
+                            });
+                        }
+                    });
+                    return Array.from(tagsSet).sort();
+                });
+
+                // 历史常用推荐标签
+                const historyTags = computed(() => {
+                    const tagsSet = new Set();
+                    favoriteWorks.value.forEach(w => {
+                        if (w.tags) w.tags.forEach(t => tagsSet.add(t));
+                    });
+                    if (authorWorks.value && authorWorks.value.works) {
+                        authorWorks.value.works.forEach(w => {
+                            if (w.tags) w.tags.forEach(t => tagsSet.add(t));
+                        });
+                    }
+                    const currentTags = editingWorkTags.value;
+                    return Array.from(tagsSet).filter(t => !currentTags.includes(t)).slice(0, 15);
+                });
+
+                const filteredWorks = computed(() => {
+                    let list = [...rawFilteredList.value];
+                    if (selectedTag.value) {
+                        list = list.filter(w => w.tags && w.tags.includes(selectedTag.value));
+                    }
                     if (sortKey.value === 'like') list.sort((a, b) => b.like_count - a.like_count);
                     else if (sortKey.value === 'usage') list.sort((a, b) => b.usage_count - a.usage_count);
                     return list;
                 });
 
                 const selectWork = async (work) => {
+                    closeTagEditor();
                     const videoElements = document.querySelectorAll('video');
                     videoElements.forEach(v => { try { v.pause(); v.src = ""; v.load(); } catch (err) {} });
                     result.value = {
@@ -2319,7 +2892,117 @@
                     return num;
                 };
 
+                // 8.0 标签编辑相关交互方法
+                const openTagEditor = (work, event) => {
+                    closeTagEditor();
+                    editingWorkId.value = work.id;
+                    editingWorkTags.value = work.tags ? [...work.tags] : [];
+                    newTagInput.value = '';
+                };
+
+                const openResultTagEditor = (resultWork, event) => {
+                    closeTagEditor();
+                    isEditingResultWork.value = true;
+                    editingWorkTags.value = resultWork.tags ? [...resultWork.tags] : [];
+                    newTagInput.value = '';
+                };
+
+                const closeTagEditor = () => {
+                    editingWorkId.value = null;
+                    isEditingResultWork.value = false;
+                    newTagInput.value = '';
+                };
+
+                const isEditingWork = (id) => {
+                    return editingWorkId.value === id;
+                };
+
+                const removeEditingTag = (tag) => {
+                    editingWorkTags.value = editingWorkTags.value.filter(t => t !== tag);
+                };
+
+                const addEditingTag = () => {
+                    const tagVal = newTagInput.value.trim();
+                    if (tagVal && !editingWorkTags.value.includes(tagVal)) {
+                        editingWorkTags.value.push(tagVal);
+                    }
+                    newTagInput.value = '';
+                };
+
+                const addEditingTagFromHistory = (tag) => {
+                    if (tag && !editingWorkTags.value.includes(tag)) {
+                        editingWorkTags.value.push(tag);
+                    }
+                };
+
+                const saveWorkTags = async () => {
+                    const isResult = isEditingResultWork.value;
+                    const workId = isResult ? result.value?.id : editingWorkId.value;
+                    const secUid = isResult ? result.value?.sec_uid : (authorWorks.value?.sec_uid || result.value?.sec_uid || '');
+                    
+                    if (!workId) return;
+                    savingTags.value = true;
+                    
+                    try {
+                        const response = await fetch('/api/work/tags/update', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                work_id: workId,
+                                sec_uid: secUid,
+                                tags: editingWorkTags.value
+                            })
+                        });
+                        const data = await response.json();
+                        if (data.code === 0) {
+                            showToast("标签保存成功！");
+                            
+                            const newTags = data.data.tags;
+                            
+                            // 同步更新前端内存中的现有 tags 数据
+                            if (result.value && result.value.id === workId) {
+                                result.value.tags = newTags;
+                            }
+                            if (authorWorks.value && authorWorks.value.works) {
+                                const target = authorWorks.value.works.find(w => w.id === workId);
+                                if (target) {
+                                    target.tags = newTags;
+                                }
+                            }
+                            const favTarget = favoriteWorks.value.find(w => w.id === workId);
+                            if (favTarget) {
+                                favTarget.tags = newTags;
+                            }
+                            
+                            closeTagEditor();
+                        } else {
+                            showToast("保存失败：" + data.msg);
+                        }
+                    } catch (e) {
+                        showToast("保存标签接口调用异常，网络错误");
+                    } finally {
+                        savingTags.value = false;
+                    }
+                };
+
                 return {
+                    selectedTag,
+                    editingWorkId,
+                    isEditingResultWork,
+                    editingWorkTags,
+                    newTagInput,
+                    savingTags,
+                    allTags,
+                    getTagColorStyle,
+                    historyTags,
+                    openTagEditor,
+                    openResultTagEditor,
+                    closeTagEditor,
+                    isEditingWork,
+                    addEditingTag,
+                    removeEditingTag,
+                    addEditingTagFromHistory,
+                    saveWorkTags,
                     shareInput,
                     loading,
                     reversing,
